@@ -159,7 +159,7 @@ public class AuthRepository(GasStationDBContext context, IConfiguration configur
 
             return fromAccess;
 
-        return 120;
+        return 720;
 
     }
 
