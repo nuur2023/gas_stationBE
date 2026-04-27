@@ -1,0 +1,5 @@
+gasstation.db
+gasstation.db-shm
+gasstation.db-wal
+bin/
+obj/

@@ -1,0 +1,7 @@
+namespace backend.Models;
+
+public class ChartsOfAccounts : BaseModel
+{
+    public string Type { get; set; } = string.Empty; // Asset, Liability, Equity, Income, Expense, COGS
+}
+
