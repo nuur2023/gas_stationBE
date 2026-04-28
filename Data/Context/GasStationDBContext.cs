@@ -1,7 +1,7 @@
-using backend.Models;
+using gas_station.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace backend.Data.Context;
+namespace gas_station.Data.Context;
 
 /// <summary>
 /// PurchaseItems reference Purchases with ON DELETE CASCADE at the database (physical delete).

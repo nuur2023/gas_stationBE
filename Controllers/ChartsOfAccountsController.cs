@@ -1,9 +1,9 @@
-using backend.Data.Context;
+using gas_station.Data.Context;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace backend.Controllers;
+namespace gas_station.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]

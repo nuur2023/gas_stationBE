@@ -1,4 +1,4 @@
-namespace backend.Models;
+namespace gas_station.Models;
 
 /// <summary>One nozzle line under an <see cref="InventorySale"/>.</summary>
 public class InventoryItem : BaseModel

@@ -1,6 +1,6 @@
-using backend.ViewModels;
+using gas_station.ViewModels;
 
-namespace backend.Data.Interfaces;
+namespace gas_station.Data.Interfaces;
 
 public interface IAuthRepository
 {

@@ -1,4 +1,4 @@
-namespace backend.ViewModels;
+namespace gas_station.ViewModels;
 
 public class SubMenuViewModel
 {

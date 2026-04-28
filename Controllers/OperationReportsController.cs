@@ -1,13 +1,13 @@
 using System.Globalization;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
-using backend.Data.Context;
-using backend.Models;
+using gas_station.Data.Context;
+using gas_station.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace backend.Controllers;
+namespace gas_station.Controllers;
 
 public record CashOutDailyLineDto(
     int Id,

@@ -1,11 +1,11 @@
-using backend.Common;
-using backend.Data.Context;
-using backend.Data.Interfaces;
-using backend.Models;
-using backend.ViewModels;
+using gas_station.Common;
+using gas_station.Data.Context;
+using gas_station.Data.Interfaces;
+using gas_station.Models;
+using gas_station.ViewModels;
 using Microsoft.EntityFrameworkCore;
 
-namespace backend.Data.Repository;
+namespace gas_station.Data.Repository;
 
 public class InventoryRepository(GasStationDBContext context) : IInventoryRepository
 {

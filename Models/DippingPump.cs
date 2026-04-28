@@ -1,4 +1,4 @@
-namespace backend.Models;
+namespace gas_station.Models;
 
 /// <summary>Links a nozzle to a dipping (tank) for fuel type / balance.</summary>
 public class DippingPump : BaseModel

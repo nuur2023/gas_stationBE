@@ -1,4 +1,4 @@
-namespace backend.Models;
+namespace gas_station.Models;
 
 /// <summary>One saved batch of fuel inventory readings for a station: single reference and evidence file for all nozzles.</summary>
 public class InventorySale : BaseModel

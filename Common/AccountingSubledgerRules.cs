@@ -1,6 +1,6 @@
-using backend.Models;
+using gas_station.Models;
 
-namespace backend.Common;
+namespace gas_station.Common;
 
 /// <summary>
 /// Detects AR/AP accounts from chart type + name so manual journals can require subledger links.

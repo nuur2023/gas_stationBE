@@ -1,16 +1,16 @@
-using backend.Common;
+using gas_station.Common;
 
-using backend.Data.Context;
+using gas_station.Data.Context;
 
-using backend.Data.Interfaces;
+using gas_station.Data.Interfaces;
 
-using backend.Models;
+using gas_station.Models;
 
 using Microsoft.EntityFrameworkCore;
 
 
 
-namespace backend.Data.Repository;
+namespace gas_station.Data.Repository;
 
 
 

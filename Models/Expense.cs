@@ -1,4 +1,4 @@
-namespace backend.Models;
+namespace gas_station.Models;
 
 public class Expense : BaseModel
 {

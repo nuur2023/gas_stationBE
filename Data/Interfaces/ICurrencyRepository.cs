@@ -1,6 +1,6 @@
-using backend.Models;
+using gas_station.Models;
 
-namespace backend.Data.Interfaces;
+namespace gas_station.Data.Interfaces;
 
 public interface ICurrencyRepository : IGasStationInterface<Currency>
 {

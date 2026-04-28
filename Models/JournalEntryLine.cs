@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
-namespace backend.Models;
+namespace gas_station.Models;
 
 public class JournalEntryLine : BaseModel
 {

@@ -4,8 +4,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>backend</RootNamespace>
-    <AssemblyName>backend</AssemblyName>
+    <RootNamespace>gas_station</RootNamespace>
+    <AssemblyName>gas_station</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>

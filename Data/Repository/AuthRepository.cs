@@ -4,13 +4,13 @@ using System.Security.Claims;
 
 using System.Text;
 
-using backend.Common;
+using gas_station.Common;
 
-using backend.Data.Context;
+using gas_station.Data.Context;
 
-using backend.Data.Interfaces;
+using gas_station.Data.Interfaces;
 
-using backend.ViewModels;
+using gas_station.ViewModels;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -18,7 +18,7 @@ using Microsoft.IdentityModel.Tokens;
 
 
 
-namespace backend.Data.Repository;
+namespace gas_station.Data.Repository;
 
 
 

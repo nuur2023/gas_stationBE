@@ -1,6 +1,6 @@
 using System.Security.Claims;
 
-namespace backend.Common;
+namespace gas_station.Common;
 
 public static class AuthClaims
 {

@@ -1,9 +1,9 @@
-using backend.Common;
-using backend.Data.Context;
-using backend.Models;
+using gas_station.Common;
+using gas_station.Data.Context;
+using gas_station.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace backend.Data.Seeds;
+namespace gas_station.Data.Seeds;
 
 public static class SeedData
 {

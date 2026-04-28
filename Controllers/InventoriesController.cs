@@ -1,17 +1,17 @@
 using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
-using backend.Common;
-using backend.Data.Context;
-using backend.Data.Interfaces;
-using backend.Models;
-using backend.ViewModels;
+using gas_station.Common;
+using gas_station.Data.Context;
+using gas_station.Data.Interfaces;
+using gas_station.Models;
+using gas_station.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace backend.Controllers;
+namespace gas_station.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]

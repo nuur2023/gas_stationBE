@@ -1,7 +1,7 @@
-using backend.Models;
+using gas_station.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace backend.Common;
+namespace gas_station.Common;
 
 public static class PagedQueryHelper
 {

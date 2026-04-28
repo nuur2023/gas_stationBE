@@ -1,4 +1,4 @@
-namespace backend.Models;
+namespace gas_station.Models;
 
 /// <summary>Physical nozzle / hose on a pump (inventory is recorded per nozzle).</summary>
 public class Nozzle : BaseModel

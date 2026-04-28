@@ -1,8 +1,8 @@
-using backend.Common;
-using backend.Models;
-using backend.ViewModels;
+using gas_station.Common;
+using gas_station.Models;
+using gas_station.ViewModels;
 
-namespace backend.Data.Interfaces;
+namespace gas_station.Data.Interfaces;
 
 public interface IPurchaseRepository
 {

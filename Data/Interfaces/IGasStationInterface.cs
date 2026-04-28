@@ -1,4 +1,4 @@
-namespace backend.Data.Interfaces;
+namespace gas_station.Data.Interfaces;
 
 public interface IGasStationInterface<T> where T : class
 {

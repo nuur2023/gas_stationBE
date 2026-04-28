@@ -1,4 +1,4 @@
-namespace backend.ViewModels;
+namespace gas_station.ViewModels;
 
 /// <summary>API list/detail row: one nozzle line joined to its parent sale (reference + evidence on sale only).</summary>
 public class InventoryResponseDto

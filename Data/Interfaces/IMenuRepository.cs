@@ -1,7 +1,7 @@
-using backend.Common;
-using backend.Models;
+using gas_station.Common;
+using gas_station.Models;
 
-namespace backend.Data.Interfaces;
+namespace gas_station.Data.Interfaces;
 
 public interface IMenuRepository : IGasStationInterface<Menu>
 {

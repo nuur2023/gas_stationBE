@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace backend.Common;
+namespace gas_station.Common;
 
 public static class PasswordHasher
 {

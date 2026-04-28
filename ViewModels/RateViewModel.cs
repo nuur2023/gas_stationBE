@@ -1,4 +1,4 @@
-namespace backend.ViewModels;
+namespace gas_station.ViewModels;
 
 /// <summary>Rate row for list APIs; includes creator display name from Users.</summary>
 public class RateViewModel

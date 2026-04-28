@@ -1,4 +1,4 @@
-namespace backend.Common;
+namespace gas_station.Common;
 
 public record PagedResult<T>(
     IReadOnlyList<T> Items,

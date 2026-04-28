@@ -1,6 +1,6 @@
 using System.Security.Claims;
 
-namespace backend.Common;
+namespace gas_station.Common;
 
 /// <summary>
 /// Resolves station filter for paged lists. When the client sends <paramref name="filterStationId"/> (workspace

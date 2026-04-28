@@ -1,8 +1,8 @@
-using backend.Data.Context;
-using backend.Models;
+using gas_station.Data.Context;
+using gas_station.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace backend.Common;
+namespace gas_station.Common;
 
 public static class AccountingPostingHelper
 {

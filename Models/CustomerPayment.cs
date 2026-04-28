@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace backend.Models;
+namespace gas_station.Models;
 
 public class CustomerPayment : BaseModel
 {
