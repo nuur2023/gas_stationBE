@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace backend.Migrations
+namespace gas_station.Migrations
 {
     /// <inheritdoc />
     public partial class initial : Migration

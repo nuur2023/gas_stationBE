@@ -5,14 +5,14 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using backend.Data.Context;
+using gas_station.Data.Context;
 
 #nullable disable
 
-namespace backend.Migrations
+namespace gas_station.Migrations
 {
     [DbContext(typeof(GasStationDBContext))]
-    [Migration("20260423164854_initial")]
+    [Migration("20260428143346_initial")]
     partial class initial
     {
         /// <inheritdoc />
@@ -25,7 +25,7 @@ namespace backend.Migrations
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
 
-            modelBuilder.Entity("backend.Models.Account", b =>
+            modelBuilder.Entity("gas_station.Models.Account", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -68,7 +68,7 @@ namespace backend.Migrations
                     b.ToTable("Accounts");
                 });
 
-            modelBuilder.Entity("backend.Models.Business", b =>
+            modelBuilder.Entity("gas_station.Models.Business", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -100,7 +100,7 @@ namespace backend.Migrations
                     b.ToTable("Businesses");
                 });
 
-            modelBuilder.Entity("backend.Models.BusinessUser", b =>
+            modelBuilder.Entity("gas_station.Models.BusinessUser", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -135,7 +135,7 @@ namespace backend.Migrations
                     b.ToTable("BusinessUsers");
                 });
 
-            modelBuilder.Entity("backend.Models.ChartsOfAccounts", b =>
+            modelBuilder.Entity("gas_station.Models.ChartsOfAccounts", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -161,7 +161,7 @@ namespace backend.Migrations
                     b.ToTable("ChartsOfAccounts");
                 });
 
-            modelBuilder.Entity("backend.Models.Currency", b =>
+            modelBuilder.Entity("gas_station.Models.Currency", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -199,7 +199,7 @@ namespace backend.Migrations
                     b.ToTable("Currencies");
                 });
 
-            modelBuilder.Entity("backend.Models.CustomerFuelGiven", b =>
+            modelBuilder.Entity("gas_station.Models.CustomerFuelGiven", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -253,7 +253,7 @@ namespace backend.Migrations
                     b.ToTable("CustomerFuelGivens");
                 });
 
-            modelBuilder.Entity("backend.Models.CustomerPayment", b =>
+            modelBuilder.Entity("gas_station.Models.CustomerPayment", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -290,7 +290,7 @@ namespace backend.Migrations
                     b.ToTable("CustomerPayments");
                 });
 
-            modelBuilder.Entity("backend.Models.Dipping", b =>
+            modelBuilder.Entity("gas_station.Models.Dipping", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -331,7 +331,7 @@ namespace backend.Migrations
                     b.ToTable("Dippings");
                 });
 
-            modelBuilder.Entity("backend.Models.DippingPump", b =>
+            modelBuilder.Entity("gas_station.Models.DippingPump", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -368,7 +368,7 @@ namespace backend.Migrations
                     b.ToTable("DippingPumps");
                 });
 
-            modelBuilder.Entity("backend.Models.Expense", b =>
+            modelBuilder.Entity("gas_station.Models.Expense", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -419,7 +419,7 @@ namespace backend.Migrations
                     b.ToTable("Expenses");
                 });
 
-            modelBuilder.Entity("backend.Models.FuelPrice", b =>
+            modelBuilder.Entity("gas_station.Models.FuelPrice", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -462,7 +462,7 @@ namespace backend.Migrations
                     b.ToTable("FuelPrices");
                 });
 
-            modelBuilder.Entity("backend.Models.FuelType", b =>
+            modelBuilder.Entity("gas_station.Models.FuelType", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -491,7 +491,7 @@ namespace backend.Migrations
                     b.ToTable("FuelTypes");
                 });
 
-            modelBuilder.Entity("backend.Models.GeneratorUsage", b =>
+            modelBuilder.Entity("gas_station.Models.GeneratorUsage", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -533,7 +533,7 @@ namespace backend.Migrations
                     b.ToTable("GeneratorUsages");
                 });
 
-            modelBuilder.Entity("backend.Models.InventoryItem", b =>
+            modelBuilder.Entity("gas_station.Models.InventoryItem", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -602,7 +602,7 @@ namespace backend.Migrations
                     b.ToTable("InventoryItems");
                 });
 
-            modelBuilder.Entity("backend.Models.InventorySale", b =>
+            modelBuilder.Entity("gas_station.Models.InventorySale", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -655,7 +655,7 @@ namespace backend.Migrations
                     b.ToTable("InventorySales");
                 });
 
-            modelBuilder.Entity("backend.Models.JournalEntry", b =>
+            modelBuilder.Entity("gas_station.Models.JournalEntry", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -693,7 +693,7 @@ namespace backend.Migrations
                     b.ToTable("JournalEntries");
                 });
 
-            modelBuilder.Entity("backend.Models.JournalEntryLine", b =>
+            modelBuilder.Entity("gas_station.Models.JournalEntryLine", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -744,7 +744,7 @@ namespace backend.Migrations
                     b.ToTable("JournalEntryLines");
                 });
 
-            modelBuilder.Entity("backend.Models.LiterReceived", b =>
+            modelBuilder.Entity("gas_station.Models.LiterReceived", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -806,7 +806,7 @@ namespace backend.Migrations
                     b.ToTable("LiterReceiveds");
                 });
 
-            modelBuilder.Entity("backend.Models.Menu", b =>
+            modelBuilder.Entity("gas_station.Models.Menu", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -836,7 +836,7 @@ namespace backend.Migrations
                     b.ToTable("Menus");
                 });
 
-            modelBuilder.Entity("backend.Models.Nozzle", b =>
+            modelBuilder.Entity("gas_station.Models.Nozzle", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -874,7 +874,7 @@ namespace backend.Migrations
                     b.ToTable("Nozzles");
                 });
 
-            modelBuilder.Entity("backend.Models.Permission", b =>
+            modelBuilder.Entity("gas_station.Models.Permission", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -928,7 +928,7 @@ namespace backend.Migrations
                     b.ToTable("Permissions");
                 });
 
-            modelBuilder.Entity("backend.Models.Pump", b =>
+            modelBuilder.Entity("gas_station.Models.Pump", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -963,7 +963,7 @@ namespace backend.Migrations
                     b.ToTable("Pumps");
                 });
 
-            modelBuilder.Entity("backend.Models.Purchase", b =>
+            modelBuilder.Entity("gas_station.Models.Purchase", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1005,7 +1005,7 @@ namespace backend.Migrations
                     b.ToTable("Purchases");
                 });
 
-            modelBuilder.Entity("backend.Models.PurchaseItem", b =>
+            modelBuilder.Entity("gas_station.Models.PurchaseItem", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1042,7 +1042,7 @@ namespace backend.Migrations
                     b.ToTable("PurchaseItems");
                 });
 
-            modelBuilder.Entity("backend.Models.Rate", b =>
+            modelBuilder.Entity("gas_station.Models.Rate", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1079,7 +1079,7 @@ namespace backend.Migrations
                     b.ToTable("Rates");
                 });
 
-            modelBuilder.Entity("backend.Models.Role", b =>
+            modelBuilder.Entity("gas_station.Models.Role", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1105,7 +1105,7 @@ namespace backend.Migrations
                     b.ToTable("Roles");
                 });
 
-            modelBuilder.Entity("backend.Models.Station", b =>
+            modelBuilder.Entity("gas_station.Models.Station", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1144,7 +1144,7 @@ namespace backend.Migrations
                     b.ToTable("Stations");
                 });
 
-            modelBuilder.Entity("backend.Models.SubMenu", b =>
+            modelBuilder.Entity("gas_station.Models.SubMenu", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1179,7 +1179,7 @@ namespace backend.Migrations
                     b.ToTable("SubMenus");
                 });
 
-            modelBuilder.Entity("backend.Models.Supplier", b =>
+            modelBuilder.Entity("gas_station.Models.Supplier", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1220,7 +1220,7 @@ namespace backend.Migrations
                     b.ToTable("Suppliers");
                 });
 
-            modelBuilder.Entity("backend.Models.User", b =>
+            modelBuilder.Entity("gas_station.Models.User", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1263,15 +1263,15 @@ namespace backend.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("backend.Models.Account", b =>
+            modelBuilder.Entity("gas_station.Models.Account", b =>
                 {
-                    b.HasOne("backend.Models.ChartsOfAccounts", "ChartsOfAccounts")
+                    b.HasOne("gas_station.Models.ChartsOfAccounts", "ChartsOfAccounts")
                         .WithMany()
                         .HasForeignKey("ChartsOfAccountsId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("backend.Models.Account", "ParentAccount")
+                    b.HasOne("gas_station.Models.Account", "ParentAccount")
                         .WithMany("Children")
                         .HasForeignKey("ParentAccountId");
 
@@ -1280,15 +1280,15 @@ namespace backend.Migrations
                     b.Navigation("ParentAccount");
                 });
 
-            modelBuilder.Entity("backend.Models.BusinessUser", b =>
+            modelBuilder.Entity("gas_station.Models.BusinessUser", b =>
                 {
-                    b.HasOne("backend.Models.Business", "Business")
+                    b.HasOne("gas_station.Models.Business", "Business")
                         .WithMany("BusinessUsers")
                         .HasForeignKey("BusinessId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("backend.Models.User", "User")
+                    b.HasOne("gas_station.Models.User", "User")
                         .WithMany("BusinessUsers")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1299,21 +1299,21 @@ namespace backend.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("backend.Models.FuelPrice", b =>
+            modelBuilder.Entity("gas_station.Models.FuelPrice", b =>
                 {
-                    b.HasOne("backend.Models.Currency", "Currency")
+                    b.HasOne("gas_station.Models.Currency", "Currency")
                         .WithMany()
                         .HasForeignKey("CurrencyId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("backend.Models.FuelType", "FuelType")
+                    b.HasOne("gas_station.Models.FuelType", "FuelType")
                         .WithMany()
                         .HasForeignKey("FuelTypeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("backend.Models.Station", "Station")
+                    b.HasOne("gas_station.Models.Station", "Station")
                         .WithMany()
                         .HasForeignKey("StationId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1326,44 +1326,44 @@ namespace backend.Migrations
                     b.Navigation("Station");
                 });
 
-            modelBuilder.Entity("backend.Models.GeneratorUsage", b =>
+            modelBuilder.Entity("gas_station.Models.GeneratorUsage", b =>
                 {
-                    b.HasOne("backend.Models.FuelType", "FuelType")
+                    b.HasOne("gas_station.Models.FuelType", "FuelType")
                         .WithMany()
                         .HasForeignKey("FuelTypeId");
 
                     b.Navigation("FuelType");
                 });
 
-            modelBuilder.Entity("backend.Models.InventoryItem", b =>
+            modelBuilder.Entity("gas_station.Models.InventoryItem", b =>
                 {
-                    b.HasOne("backend.Models.InventorySale", null)
+                    b.HasOne("gas_station.Models.InventorySale", null)
                         .WithMany()
                         .HasForeignKey("InventorySaleId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("backend.Models.JournalEntryLine", b =>
+            modelBuilder.Entity("gas_station.Models.JournalEntryLine", b =>
                 {
-                    b.HasOne("backend.Models.Account", "Account")
+                    b.HasOne("gas_station.Models.Account", "Account")
                         .WithMany()
                         .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("backend.Models.CustomerFuelGiven", "Customer")
+                    b.HasOne("gas_station.Models.CustomerFuelGiven", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("backend.Models.JournalEntry", "JournalEntry")
+                    b.HasOne("gas_station.Models.JournalEntry", "JournalEntry")
                         .WithMany("Lines")
                         .HasForeignKey("JournalEntryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("backend.Models.Supplier", "Supplier")
+                    b.HasOne("gas_station.Models.Supplier", "Supplier")
                         .WithMany()
                         .HasForeignKey("SupplierId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -1377,25 +1377,25 @@ namespace backend.Migrations
                     b.Navigation("Supplier");
                 });
 
-            modelBuilder.Entity("backend.Models.Permission", b =>
+            modelBuilder.Entity("gas_station.Models.Permission", b =>
                 {
-                    b.HasOne("backend.Models.Business", "Business")
+                    b.HasOne("gas_station.Models.Business", "Business")
                         .WithMany("Permissions")
                         .HasForeignKey("BusinessId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("backend.Models.Menu", "Menu")
+                    b.HasOne("gas_station.Models.Menu", "Menu")
                         .WithMany("Permissions")
                         .HasForeignKey("MenuId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("backend.Models.SubMenu", "SubMenu")
+                    b.HasOne("gas_station.Models.SubMenu", "SubMenu")
                         .WithMany("Permissions")
                         .HasForeignKey("SubMenuId");
 
-                    b.HasOne("backend.Models.User", "User")
+                    b.HasOne("gas_station.Models.User", "User")
                         .WithMany("Permissions")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1410,9 +1410,9 @@ namespace backend.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("backend.Models.SubMenu", b =>
+            modelBuilder.Entity("gas_station.Models.SubMenu", b =>
                 {
-                    b.HasOne("backend.Models.Menu", "Menu")
+                    b.HasOne("gas_station.Models.Menu", "Menu")
                         .WithMany("SubMenus")
                         .HasForeignKey("MenuId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1421,9 +1421,9 @@ namespace backend.Migrations
                     b.Navigation("Menu");
                 });
 
-            modelBuilder.Entity("backend.Models.User", b =>
+            modelBuilder.Entity("gas_station.Models.User", b =>
                 {
-                    b.HasOne("backend.Models.Role", "Role")
+                    b.HasOne("gas_station.Models.Role", "Role")
                         .WithMany("Users")
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1432,41 +1432,41 @@ namespace backend.Migrations
                     b.Navigation("Role");
                 });
 
-            modelBuilder.Entity("backend.Models.Account", b =>
+            modelBuilder.Entity("gas_station.Models.Account", b =>
                 {
                     b.Navigation("Children");
                 });
 
-            modelBuilder.Entity("backend.Models.Business", b =>
+            modelBuilder.Entity("gas_station.Models.Business", b =>
                 {
                     b.Navigation("BusinessUsers");
 
                     b.Navigation("Permissions");
                 });
 
-            modelBuilder.Entity("backend.Models.JournalEntry", b =>
+            modelBuilder.Entity("gas_station.Models.JournalEntry", b =>
                 {
                     b.Navigation("Lines");
                 });
 
-            modelBuilder.Entity("backend.Models.Menu", b =>
+            modelBuilder.Entity("gas_station.Models.Menu", b =>
                 {
                     b.Navigation("Permissions");
 
                     b.Navigation("SubMenus");
                 });
 
-            modelBuilder.Entity("backend.Models.Role", b =>
+            modelBuilder.Entity("gas_station.Models.Role", b =>
                 {
                     b.Navigation("Users");
                 });
 
-            modelBuilder.Entity("backend.Models.SubMenu", b =>
+            modelBuilder.Entity("gas_station.Models.SubMenu", b =>
                 {
                     b.Navigation("Permissions");
                 });
 
-            modelBuilder.Entity("backend.Models.User", b =>
+            modelBuilder.Entity("gas_station.Models.User", b =>
                 {
                     b.Navigation("BusinessUsers");
 

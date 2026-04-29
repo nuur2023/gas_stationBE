@@ -135,10 +135,10 @@
 // app.Run();
 
 
-using backend.Data.Context;
-using backend.Data.Interfaces;
-using backend.Data.Repository;
-using backend.Data.Seeds;
+using gas_station.Data.Context;
+using gas_station.Data.Interfaces;
+using gas_station.Data.Repository;
+using gas_station.Data.Seeds;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -288,5 +288,7 @@ using (var scope = app.Services.CreateScope())
 // var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 // app.Run($"http://0.0.0.0:{port}");
 
-//------------------Full port binding------------------
-app.Run($"http://0.0.0.0:8080");
+//------------------Dynamic port binding (App Platform / containers)------------------
+var portValue = Environment.GetEnvironmentVariable("PORT");
+var port = int.TryParse(portValue, out var parsedPort) ? parsedPort : 8080;
+app.Run($"http://0.0.0.0:{port}");
