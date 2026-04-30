@@ -27,7 +27,7 @@ public static class SeedData
                 await context.SaveChangesAsync();
             }
            
-        }
+        
             var superAdminRoleId = roles.First(r => r.Name == "SuperAdmin").Id;
             // if already added in the database
             if (!await context.Users.AnyAsync(u => u.Email == "superadmin@gmail.com"))
@@ -54,6 +54,7 @@ public static class SeedData
         // await EnsureInventoryFuelPriceColumnsAsync(context);
         // await EnsureDippingPumpNavAndAdminPermissionsAsync(context);
         // await EnsurePumpNozzlesSubmenuAsync(context);
+    }
     }
 
     /// <summary>
