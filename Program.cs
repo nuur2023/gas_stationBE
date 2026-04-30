@@ -162,7 +162,7 @@ builder.Services.AddSwaggerGen();
 
 // -------------------- DATABASE --------------------
 builder.Services.AddDbContext<GasStationDBContext>(options => options.UseMySql(
-    builder.Configuration.GetConnectionString("ConStr"), new MySqlServerVersion(new Version(10, 4, 34)))
+    builder.Configuration.GetConnectionString("ConStr"), new MySqlServerVersion(new Version(8, 0, 36)))
 );
 
 // -------------------- JWT --------------------
