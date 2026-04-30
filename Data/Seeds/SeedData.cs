@@ -20,13 +20,19 @@ public static class SeedData
                 new Role { Name = "Accountant" },
                 new Role { Name = "Manager" }
             };
-
-            await context.Roles.AddRangeAsync(roles);
-            await context.SaveChangesAsync();
-
+            // if roles are already added in the database, then skip this
+            if (!await context.Roles.AnyAsync())
+            {   
+                await context.Roles.AddRangeAsync(roles);
+                await context.SaveChangesAsync();
+            }
+           
+        }
             var superAdminRoleId = roles.First(r => r.Name == "SuperAdmin").Id;
-
-            await context.Users.AddRangeAsync(
+            // if already added in the database
+            if (!await context.Users.AnyAsync(u => u.Email == "superadmin@gmail.com"))
+            {
+                await context.Users.AddRangeAsync(
                 new User
                 {
                     Name = "Nuur Hassan Mohamed",
