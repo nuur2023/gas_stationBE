@@ -233,6 +233,7 @@ builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IJournalEntryRepository, JournalEntryRepository>();
 builder.Services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
+builder.Services.AddScoped<IBusinessFuelInventoryLedgerRepository, BusinessFuelInventoryLedgerRepository>();
 
 // -------------------- FORWARDED HEADERS --------------------
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -275,6 +276,13 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// -------------------- MIGRATE DATABASE --------------------
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<GasStationDBContext>();
+    db.Database.Migrate();
+}
 
 // -------------------- SEED DATA --------------------
 using (var scope = app.Services.CreateScope())

@@ -521,6 +521,8 @@ public static class SeedData
             ("Currencies", "/setup/currencies", "Currencies"),
             // ("Fuel prices", "/setup/fuel-prices", "Fuel prices"),
             ("Settings", "/setup/settings", "Settings"),
+            ("Business fuel pool", "/fuel-inventory", "Business fuel pool"),
+            ("Transfer fuels", "/transfers", "Transfer fuels"),
             // ("Reports", "/reports/outstanding-customers", "Outstanding customers"),
         ];
 

@@ -56,6 +56,83 @@ public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) 
             e.HasIndex(x => new { x.InventorySaleId, x.NozzleId }).IsUnique();
             e.HasIndex(x => new { x.NozzleId, x.Date });
         });
+
+        modelBuilder.Entity<BusinessFuelInventory>(e =>
+        {
+            e.HasOne<Business>()
+                .WithMany()
+                .HasForeignKey(x => x.BusinessId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<FuelType>()
+                .WithMany()
+                .HasForeignKey(x => x.FuelTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasIndex(x => new { x.BusinessId, x.FuelTypeId }).IsUnique();
+        });
+
+        modelBuilder.Entity<BusinessFuelInventoryCredit>(e =>
+        {
+            e.HasOne<Business>()
+                .WithMany()
+                .HasForeignKey(x => x.BusinessId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<FuelType>()
+                .WithMany()
+                .HasForeignKey(x => x.FuelTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.CreatorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.Property(x => x.Reference).HasMaxLength(256);
+            e.Property(x => x.Note).HasMaxLength(2000);
+            e.HasIndex(x => new { x.BusinessId, x.Date });
+        });
+
+        modelBuilder.Entity<TransferInventory>(e =>
+        {
+            e.HasOne<BusinessFuelInventory>()
+                .WithMany()
+                .HasForeignKey(x => x.BusinessFuelInventoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<Station>()
+                .WithMany()
+                .HasForeignKey(x => x.ToStationId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.CreatorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.Property(x => x.Note).HasMaxLength(2000);
+            e.HasIndex(x => new { x.ToStationId, x.Date });
+        });
+
+        modelBuilder.Entity<TransferInventoryAudit>(e =>
+        {
+            e.HasOne<TransferInventory>()
+                .WithMany()
+                .HasForeignKey(x => x.TransferInventoryId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.ChangedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.Property(x => x.Action).HasMaxLength(32);
+            e.Property(x => x.Reason).HasMaxLength(2000);
+            e.Property(x => x.BeforeJson).HasMaxLength(4000);
+            e.Property(x => x.AfterJson).HasMaxLength(4000);
+            e.HasIndex(x => new { x.TransferInventoryId, x.ChangedAt });
+        });
     }
 
     public DbSet<Business> Businesses => Set<Business>();
@@ -88,4 +165,8 @@ public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) 
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
     public DbSet<JournalEntryLine> JournalEntryLines => Set<JournalEntryLine>();
     public DbSet<CustomerPayment> CustomerPayments => Set<CustomerPayment>();
+    public DbSet<BusinessFuelInventory> BusinessFuelInventories => Set<BusinessFuelInventory>();
+    public DbSet<BusinessFuelInventoryCredit> BusinessFuelInventoryCredits => Set<BusinessFuelInventoryCredit>();
+    public DbSet<TransferInventory> TransferInventories => Set<TransferInventory>();
+    public DbSet<TransferInventoryAudit> TransferInventoryAudits => Set<TransferInventoryAudit>();
 }
