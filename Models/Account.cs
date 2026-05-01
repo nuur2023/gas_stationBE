@@ -18,6 +18,8 @@ public class Account : BaseModel
     public Account? ParentAccount { get; set; }
     [ValidateNever]
     public ICollection<Account>? Children { get; set; }
+    [ValidateNever]
+    public ICollection<JournalEntryLine> JournalEntryLines { get; set; } = new List<JournalEntryLine>();
 
 }
 

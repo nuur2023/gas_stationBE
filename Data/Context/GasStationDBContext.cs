@@ -14,12 +14,12 @@ public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) 
         modelBuilder.Entity<JournalEntryLine>(e =>
         {
             e.HasOne(x => x.Customer)
-                .WithMany()
+                .WithMany(c => c.JournalEntryLines)
                 .HasForeignKey(x => x.CustomerId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             e.HasOne(x => x.Supplier)
-                .WithMany()
+                .WithMany(s => s.JournalEntryLines)
                 .HasForeignKey(x => x.SupplierId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
@@ -48,8 +48,8 @@ public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) 
 
         modelBuilder.Entity<InventoryItem>(e =>
         {
-            e.HasOne<InventorySale>()
-                .WithMany()
+            e.HasOne(x => x.InventorySale)
+                .WithMany(s => s.InventoryItems)
                 .HasForeignKey(x => x.InventorySaleId)
                 .OnDelete(DeleteBehavior.Cascade);
 

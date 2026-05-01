@@ -17,4 +17,5 @@ public class InventorySale : BaseModel
     public string EvidenceFilePath { get; set; } = string.Empty;
 
     public string? OriginalFileName { get; set; }
+    public ICollection<InventoryItem> InventoryItems { get; set; } = new List<InventoryItem>();
 }

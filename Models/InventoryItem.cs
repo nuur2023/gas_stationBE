@@ -19,4 +19,5 @@ public class InventoryItem : BaseModel
 
     /// <summary>Same as parent sale <see cref="InventorySale.RecordedDate"/> for filtering/reporting.</summary>
     public DateTime Date { get; set; }
+    public InventorySale InventorySale { get; set; } = null!;
 }

@@ -12,4 +12,5 @@ public class CustomerFuelGiven : BaseModel
     public int StationId { get; set; }
     public int BusinessId { get; set; }
     public DateTime Date { get; set; } = DateTime.UtcNow;
+    public ICollection<JournalEntryLine> JournalEntryLines { get; set; } = new List<JournalEntryLine>();
 }
