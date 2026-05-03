@@ -127,11 +127,105 @@ public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) 
                 .HasForeignKey(x => x.ChangedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            e.HasOne<Business>()
+                .WithMany()
+                .HasForeignKey(x => x.BusinessId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<Station>()
+                .WithMany()
+                .HasForeignKey(x => x.ToStationId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             e.Property(x => x.Action).HasMaxLength(32);
             e.Property(x => x.Reason).HasMaxLength(2000);
-            e.Property(x => x.BeforeJson).HasMaxLength(4000);
-            e.Property(x => x.AfterJson).HasMaxLength(4000);
             e.HasIndex(x => new { x.TransferInventoryId, x.ChangedAt });
+            e.HasIndex(x => x.BusinessId);
+        });
+
+        modelBuilder.Entity<AccountingPeriod>(e =>
+        {
+            e.HasOne<Business>()
+                .WithMany()
+                .HasForeignKey(x => x.BusinessId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.Property(x => x.Name).HasMaxLength(128);
+            e.HasIndex(x => new { x.BusinessId, x.PeriodStart, x.PeriodEnd }).IsUnique();
+        });
+
+        modelBuilder.Entity<RecurringJournalEntry>(e =>
+        {
+            e.HasOne<Business>()
+                .WithMany()
+                .HasForeignKey(x => x.BusinessId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(x => x.DebitAccount)
+                .WithMany()
+                .HasForeignKey(x => x.DebitAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(x => x.CreditAccount)
+                .WithMany()
+                .HasForeignKey(x => x.CreditAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<Supplier>()
+                .WithMany()
+                .HasForeignKey(x => x.SupplierId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<CustomerFuelGiven>()
+                .WithMany()
+                .HasForeignKey(x => x.CustomerFuelGivenId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.PostingUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(x => x.Station)
+                .WithMany()
+                .HasForeignKey(x => x.StationId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            e.Property(x => x.Name).HasMaxLength(256);
+            e.HasIndex(x => new { x.BusinessId, x.NextRunDate });
+            e.HasIndex(x => x.StationId);
+        });
+
+        modelBuilder.Entity<JournalEntry>(e =>
+        {
+            e.HasOne<RecurringJournalEntry>()
+                .WithMany()
+                .HasForeignKey(x => x.RecurringJournalEntryId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<Business>(e =>
+        {
+            e.HasOne<Account>()
+                .WithMany()
+                .HasForeignKey(x => x.RetainedEarningsAccountId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<SupplierPayment>(e =>
+        {
+            e.HasOne<Supplier>()
+                .WithMany()
+                .HasForeignKey(x => x.SupplierId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<Business>()
+                .WithMany()
+                .HasForeignKey(x => x.BusinessId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.Property(x => x.ReferenceNo).HasMaxLength(128);
+            e.HasIndex(x => new { x.BusinessId, x.Date });
         });
     }
 
@@ -157,6 +251,7 @@ public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) 
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<Purchase> Purchases => Set<Purchase>();
     public DbSet<PurchaseItem> PurchaseItems => Set<PurchaseItem>();
+    public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
     public DbSet<Currency> Currencies => Set<Currency>();
     public DbSet<FuelPrice> FuelPrices => Set<FuelPrice>();
     public DbSet<CustomerFuelGiven> CustomerFuelGivens => Set<CustomerFuelGiven>();
@@ -169,4 +264,6 @@ public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) 
     public DbSet<BusinessFuelInventoryCredit> BusinessFuelInventoryCredits => Set<BusinessFuelInventoryCredit>();
     public DbSet<TransferInventory> TransferInventories => Set<TransferInventory>();
     public DbSet<TransferInventoryAudit> TransferInventoryAudits => Set<TransferInventoryAudit>();
+    public DbSet<AccountingPeriod> AccountingPeriods => Set<AccountingPeriod>();
+    public DbSet<RecurringJournalEntry> RecurringJournalEntries => Set<RecurringJournalEntry>();
 }

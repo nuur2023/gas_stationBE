@@ -57,7 +57,9 @@ public static class AccountingPostingHelper
         int businessId,
         int userId,
         int? stationId,
-        IEnumerable<(int accountId, double debit, double credit, string? remark, int? customerId, int? supplierId)> lines)
+        IEnumerable<(int accountId, double debit, double credit, string? remark, int? customerId, int? supplierId)> lines,
+        JournalEntryKind entryKind = JournalEntryKind.Normal,
+        int? recurringJournalEntryId = null)
     {
         var entry = new JournalEntry
         {
@@ -66,6 +68,8 @@ public static class AccountingPostingHelper
             BusinessId = businessId,
             UserId = userId,
             StationId = stationId,
+            EntryKind = entryKind,
+            RecurringJournalEntryId = recurringJournalEntryId,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
         };

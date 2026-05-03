@@ -1,4 +1,3 @@
-using System.Text.Json;
 using gas_station.Common;
 using gas_station.Data.Context;
 using gas_station.Data.Interfaces;
@@ -11,10 +10,6 @@ namespace gas_station.Data.Repository;
 public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) : IBusinessFuelInventoryLedgerRepository
 {
     private readonly GasStationDBContext _context = context;
-
-    private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-
-    private sealed record TransferSnapshot(int ToStationId, double Liters, DateTime Date, string? Note);
 
     public async Task<List<BusinessFuelInventoryBalanceDto>> GetBalancesAsync(int businessId)
     {
@@ -256,16 +251,17 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
             _context.TransferInventories.Add(transfer);
             await _context.SaveChangesAsync();
 
-            var after = new TransferSnapshot(transfer.ToStationId, transfer.Liters, transfer.Date, transfer.Note);
             _context.TransferInventoryAudits.Add(new TransferInventoryAudit
             {
                 TransferInventoryId = transfer.Id,
                 Action = "Created",
                 ChangedAt = now,
                 ChangedByUserId = creatorId,
+                ToStationId = transfer.ToStationId,
+                Liters = transfer.Liters,
+                Date = transfer.Date,
                 Reason = null,
-                BeforeJson = null,
-                AfterJson = JsonSerializer.Serialize(after, JsonOpts),
+                BusinessId = businessId,
                 CreatedAt = now,
                 UpdatedAt = now,
                 IsDeleted = false,
@@ -311,7 +307,6 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
                 .FirstOrDefaultAsync(x => x.Id == transfer.BusinessFuelInventoryId && !x.IsDeleted);
             if (balance is null || balance.BusinessId != businessId) return null;
 
-            var before = new TransferSnapshot(transfer.ToStationId, transfer.Liters, transfer.Date, transfer.Note);
             var oldLiters = transfer.Liters;
 
             balance.Liters += oldLiters;
@@ -331,16 +326,17 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
             transfer.Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
             transfer.UpdatedAt = now;
 
-            var after = new TransferSnapshot(transfer.ToStationId, transfer.Liters, transfer.Date, transfer.Note);
             _context.TransferInventoryAudits.Add(new TransferInventoryAudit
             {
                 TransferInventoryId = transfer.Id,
                 Action = "Updated",
                 ChangedAt = now,
                 ChangedByUserId = userId,
+                ToStationId = transfer.ToStationId,
+                Liters = transfer.Liters,
+                Date = transfer.Date,
                 Reason = reason.Trim(),
-                BeforeJson = JsonSerializer.Serialize(before, JsonOpts),
-                AfterJson = JsonSerializer.Serialize(after, JsonOpts),
+                BusinessId = businessId,
                 CreatedAt = now,
                 UpdatedAt = now,
                 IsDeleted = false,
@@ -372,10 +368,13 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
                 .FirstOrDefaultAsync(x => x.Id == transfer.BusinessFuelInventoryId && !x.IsDeleted);
             if (balance is null || balance.BusinessId != businessId) return false;
 
-            var before = new TransferSnapshot(transfer.ToStationId, transfer.Liters, transfer.Date, transfer.Note);
             var now = DateTime.UtcNow;
             balance.Liters += transfer.Liters;
             balance.UpdatedAt = now;
+
+            var delToStationId = transfer.ToStationId;
+            var delLiters = transfer.Liters;
+            var delDate = transfer.Date;
 
             transfer.IsDeleted = true;
             transfer.UpdatedAt = now;
@@ -386,9 +385,11 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
                 Action = "Deleted",
                 ChangedAt = now,
                 ChangedByUserId = userId,
+                ToStationId = delToStationId,
+                Liters = delLiters,
+                Date = delDate,
                 Reason = reason.Trim(),
-                BeforeJson = JsonSerializer.Serialize(before, JsonOpts),
-                AfterJson = null,
+                BusinessId = businessId,
                 CreatedAt = now,
                 UpdatedAt = now,
                 IsDeleted = false,
@@ -426,10 +427,71 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
                 ChangedAt = a.ChangedAt,
                 ChangedByUserId = a.ChangedByUserId,
                 ChangedByName = u != null ? u.Name : null,
+                ToStationId = a.ToStationId,
+                Liters = a.Liters,
+                Date = a.Date,
                 Reason = a.Reason,
-                BeforeJson = a.BeforeJson,
-                AfterJson = a.AfterJson,
+                BusinessId = a.BusinessId,
             }).ToListAsync();
+    }
+
+    public async Task<PagedResult<TransferInventoryAuditListRowDto>> GetTransferAuditsPagedForBusinessAsync(
+        int businessId, int page, int pageSize, string? search)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 200);
+
+        var q =
+            from a in _context.TransferInventoryAudits.AsNoTracking()
+            join t in _context.TransferInventories.AsNoTracking() on a.TransferInventoryId equals t.Id
+            join b in _context.BusinessFuelInventories.AsNoTracking() on t.BusinessFuelInventoryId equals b.Id
+            join f in _context.FuelTypes.AsNoTracking() on b.FuelTypeId equals f.Id into fj
+            from f in fj.DefaultIfEmpty()
+            join st in _context.Stations.AsNoTracking() on a.ToStationId equals st.Id into stj
+            from st in stj.DefaultIfEmpty()
+            join ch in _context.Users.AsNoTracking() on a.ChangedByUserId equals ch.Id into chj
+            from ch in chj.DefaultIfEmpty()
+            where !a.IsDeleted && a.BusinessId == businessId && !b.IsDeleted
+            select new TransferInventoryAuditListRowDto
+            {
+                Id = a.Id,
+                TransferInventoryId = a.TransferInventoryId,
+                Action = a.Action,
+                ChangedAt = a.ChangedAt,
+                ChangedByUserId = a.ChangedByUserId,
+                ChangedByName = ch != null ? ch.Name : null,
+                ToStationId = a.ToStationId,
+                Liters = a.Liters,
+                Date = a.Date,
+                Reason = a.Reason,
+                BusinessId = a.BusinessId,
+                FuelName = f != null ? f.FuelName : string.Empty,
+                StationName = st != null ? st.Name : string.Empty,
+            };
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            var termLower = term.ToLowerInvariant();
+            q = q.Where(row =>
+                row.Action.ToLower().Contains(termLower) ||
+                (row.Reason != null && row.Reason.ToLower().Contains(termLower)) ||
+                (row.ChangedByName != null && row.ChangedByName.ToLower().Contains(termLower)) ||
+                row.FuelName.ToLower().Contains(termLower) ||
+                row.StationName.ToLower().Contains(termLower) ||
+                row.TransferInventoryId.ToString().Contains(term) ||
+                row.ToStationId.ToString().Contains(term));
+        }
+
+        var total = await q.CountAsync();
+        var items = await q
+            .OrderByDescending(row => row.ChangedAt)
+            .ThenByDescending(row => row.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return new PagedResult<TransferInventoryAuditListRowDto>(items, total, page, pageSize);
     }
 
     private async Task<TransferInventoryDto?> BuildTransferDtoAsync(int transferId, int businessId)

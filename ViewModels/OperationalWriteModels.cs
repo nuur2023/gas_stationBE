@@ -158,7 +158,15 @@ public class DippingPumpWriteRequestViewModel
     public int BusinessId { get; set; }
 }
 
-
+public class SupplierPaymentWriteRequestViewModel
+{
+    public string? ReferenceNo { get; set; }
+    public int SupplierId { get; set; }
+    public string Amount { get; set; } = "0";
+    public DateTimeOffset? Date { get; set; }
+    /// <summary>SuperAdmin must set; others use JWT business.</summary>
+    public int BusinessId { get; set; }
+}
 
 public class StationWriteRequestViewModel
 

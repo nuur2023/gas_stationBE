@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using gas_station.Data.Context;
 
@@ -11,9 +12,11 @@ using gas_station.Data.Context;
 namespace gas_station.Migrations
 {
     [DbContext(typeof(GasStationDBContext))]
-    partial class GasStationDBContextModelSnapshot : ModelSnapshot
+    [Migration("20260502124850_RecurringJournalStationId")]
+    partial class RecurringJournalStationId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1191,49 +1194,6 @@ namespace gas_station.Migrations
                     b.ToTable("PurchaseItems");
                 });
 
-            modelBuilder.Entity("gas_station.Models.SupplierPayment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<double>("Amount")
-                        .HasColumnType("double");
-
-                    b.Property<int>("BusinessId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<string>("ReferenceNo")
-                        .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
-
-                    b.Property<int>("SupplierId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BusinessId", "Date");
-
-                    b.ToTable("SupplierPayments");
-                });
-
             modelBuilder.Entity("gas_station.Models.Rate", b =>
                 {
                     b.Property<int>("Id")
@@ -1558,8 +1518,13 @@ namespace gas_station.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)");
 
-                    b.Property<int>("BusinessId")
-                        .HasColumnType("int");
+                    b.Property<string>("AfterJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("varchar(4000)");
+
+                    b.Property<string>("BeforeJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("varchar(4000)");
 
                     b.Property<DateTime>("ChangedAt")
                         .HasColumnType("datetime(6)");
@@ -1570,21 +1535,12 @@ namespace gas_station.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime(6)");
-
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("tinyint(1)");
-
-                    b.Property<double>("Liters")
-                        .HasColumnType("double");
 
                     b.Property<string>("Reason")
                         .HasMaxLength(2000)
                         .HasColumnType("varchar(2000)");
-
-                    b.Property<int>("ToStationId")
-                        .HasColumnType("int");
 
                     b.Property<int>("TransferInventoryId")
                         .HasColumnType("int");
@@ -1594,11 +1550,7 @@ namespace gas_station.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BusinessId");
-
                     b.HasIndex("ChangedByUserId");
-
-                    b.HasIndex("ToStationId");
 
                     b.HasIndex("TransferInventoryId", "ChangedAt");
 
@@ -1940,21 +1892,9 @@ namespace gas_station.Migrations
 
             modelBuilder.Entity("gas_station.Models.TransferInventoryAudit", b =>
                 {
-                    b.HasOne("gas_station.Models.Business", null)
-                        .WithMany()
-                        .HasForeignKey("BusinessId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("gas_station.Models.User", null)
                         .WithMany()
                         .HasForeignKey("ChangedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("gas_station.Models.Station", null)
-                        .WithMany()
-                        .HasForeignKey("ToStationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 

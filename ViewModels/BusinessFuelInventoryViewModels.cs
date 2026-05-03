@@ -47,9 +47,29 @@ public class TransferInventoryAuditDto
     public DateTime ChangedAt { get; set; }
     public int ChangedByUserId { get; set; }
     public string? ChangedByName { get; set; }
+    public int ToStationId { get; set; }
+    public double Liters { get; set; }
+    public DateTime Date { get; set; }
     public string? Reason { get; set; }
-    public string? BeforeJson { get; set; }
-    public string? AfterJson { get; set; }
+    public int BusinessId { get; set; }
+}
+
+/// <summary>Audit row with transfer context for business-wide listing.</summary>
+public class TransferInventoryAuditListRowDto
+{
+    public int Id { get; set; }
+    public int TransferInventoryId { get; set; }
+    public string Action { get; set; } = string.Empty;
+    public DateTime ChangedAt { get; set; }
+    public int ChangedByUserId { get; set; }
+    public string? ChangedByName { get; set; }
+    public int ToStationId { get; set; }
+    public double Liters { get; set; }
+    public DateTime Date { get; set; }
+    public string? Reason { get; set; }
+    public int BusinessId { get; set; }
+    public string FuelName { get; set; } = string.Empty;
+    public string StationName { get; set; } = string.Empty;
 }
 
 public class BusinessFuelInventoryCreditWriteRequest

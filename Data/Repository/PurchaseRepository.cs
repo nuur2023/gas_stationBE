@@ -62,7 +62,7 @@ public class PurchaseRepository(GasStationDBContext context) : IPurchaseReposito
         return new PagedResult<Purchase>(items, total, page, pageSize);
     }
 
-    public async Task<PurchaseDetailResponse> AddWithItemsAsync(Purchase purchase, IReadOnlyList<PurchaseItem> items)
+    public async Task<PurchaseDetailResponse> AddWithItemsAsync(Purchase purchase, IReadOnlyList<PurchaseItem> items, SupplierPayment? supplierPayment = null)
     {
         await using var tx = await _context.Database.BeginTransactionAsync();
         try
@@ -83,6 +83,15 @@ public class PurchaseRepository(GasStationDBContext context) : IPurchaseReposito
                 }
 
                 await ItemSet.AddRangeAsync(items);
+                await _context.SaveChangesAsync();
+            }
+
+            if (supplierPayment is not null)
+            {
+                supplierPayment.CreatedAt = DateTime.UtcNow;
+                supplierPayment.UpdatedAt = DateTime.UtcNow;
+                supplierPayment.IsDeleted = false;
+                await _context.Set<SupplierPayment>().AddAsync(supplierPayment);
                 await _context.SaveChangesAsync();
             }
 

@@ -27,6 +27,8 @@ public class JournalEntryWriteRequestViewModel
     public string Description { get; set; } = "";
     public int BusinessId { get; set; }
     public int? StationId { get; set; }
+    /// <summary>Optional: 0 Normal, 1 Adjusting, 2 Closing, 3 RecurringAuto. Defaults to Normal.</summary>
+    public byte? EntryKind { get; set; }
     public List<JournalEntryLineWriteRequestViewModel> Lines { get; set; } = new();
 }
 

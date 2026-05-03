@@ -10,11 +10,14 @@ public class TransferInventoryAudit : BaseModel
 
     public DateTime ChangedAt { get; set; }
     public int ChangedByUserId { get; set; }
+
+    /// <summary>Station and liters snapshot for this audit row.</summary>
+    public int ToStationId { get; set; }
+
+    public double Liters { get; set; }
+    public DateTime Date { get; set; }
+
     public string? Reason { get; set; }
 
-    /// <summary>JSON snapshot of relevant fields before the change (null on Created).</summary>
-    public string? BeforeJson { get; set; }
-
-    /// <summary>JSON snapshot after the change (null on Deleted).</summary>
-    public string? AfterJson { get; set; }
+    public int BusinessId { get; set; }
 }

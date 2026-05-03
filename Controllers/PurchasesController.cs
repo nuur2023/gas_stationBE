@@ -27,6 +27,20 @@ public class PurchasesController(
         return !string.IsNullOrEmpty(bidStr) && int.TryParse(bidStr, out businessId);
     }
 
+    private bool TryGetUserId(out int userId, out IActionResult? error)
+    {
+        userId = 0;
+        error = null;
+        var uid = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(uid) || !int.TryParse(uid, out userId))
+        {
+            error = Unauthorized();
+            return false;
+        }
+
+        return true;
+    }
+
     private bool ResolvePurchaseBusiness(PurchaseWriteRequestViewModel dto, out int targetBusinessId, out IActionResult? err)
     {
         targetBusinessId = 0;
@@ -232,6 +246,11 @@ public class PurchasesController(
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] PurchaseWriteRequestViewModel dto)
     {
+        if (!TryGetUserId(out var userId, out var uerr))
+        {
+            return uerr!;
+        }
+
         if (!ResolvePurchaseBusiness(dto, out var targetBusinessId, out var bizErr))
         {
             return bizErr!;
@@ -255,19 +274,40 @@ public class PurchasesController(
             items = parsed;
         }
 
+        var normStatus = NormalizePurchaseStatus(dto.Status);
+        var amountPaid = normStatus == "Unpaid"
+            ? 0
+            : (double.TryParse((dto.AmountPaid ?? "0").Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var ap)
+                ? Math.Max(0, ap)
+                : 0);
+
         var purchase = new Purchase
         {
             SupplierId = dto.SupplierId,
             InvoiceNo = dto.InvoiceNo.Trim(),
             BusinessId = targetBusinessId,
             PurchaseDate = dto.PurchaseDate?.UtcDateTime ?? DateTime.UtcNow,
-            Status = NormalizePurchaseStatus(dto.Status),
-            AmountPaid = double.TryParse((dto.AmountPaid ?? "0").Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var ap) ? Math.Max(0, ap) : 0,
+            Status = normStatus,
+            AmountPaid = amountPaid,
         };
+
+        SupplierPayment? supplierPayment = null;
+        if ((normStatus == "Paid" || normStatus == "Half-paid") && amountPaid > 0)
+        {
+            supplierPayment = new SupplierPayment
+            {
+                ReferenceNo = string.IsNullOrWhiteSpace(dto.InvoiceNo) ? null : dto.InvoiceNo.Trim(),
+                SupplierId = dto.SupplierId,
+                Amount = amountPaid,
+                Date = purchase.PurchaseDate,
+                BusinessId = targetBusinessId,
+                UserId = userId,
+            };
+        }
 
         try
         {
-            var created = await repository.AddWithItemsAsync(purchase, items);
+            var created = await repository.AddWithItemsAsync(purchase, items, supplierPayment);
             return Ok(created);
         }
         catch (InvalidOperationException ex)
@@ -308,14 +348,21 @@ public class PurchasesController(
             return supErr;
         }
 
+        var normStatus = NormalizePurchaseStatus(dto.Status);
+        var amountPaid = normStatus == "Unpaid"
+            ? 0
+            : (double.TryParse((dto.AmountPaid ?? "0").Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var ap)
+                ? Math.Max(0, ap)
+                : 0);
+
         var purchase = new Purchase
         {
             SupplierId = dto.SupplierId,
             InvoiceNo = dto.InvoiceNo.Trim(),
             BusinessId = targetBusinessId,
             PurchaseDate = dto.PurchaseDate?.UtcDateTime ?? existing.PurchaseDate,
-            Status = NormalizePurchaseStatus(dto.Status),
-            AmountPaid = double.TryParse((dto.AmountPaid ?? "0").Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var ap) ? Math.Max(0, ap) : 0,
+            Status = normStatus,
+            AmountPaid = amountPaid,
         };
 
         var updated = await repository.UpdateHeaderAsync(id, purchase);

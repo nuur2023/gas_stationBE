@@ -9,7 +9,7 @@ public interface IPurchaseRepository
     Task<Purchase?> GetByIdAsync(int id);
     Task<PurchaseDetailResponse?> GetDetailAsync(int id);
     Task<PagedResult<Purchase>> GetPagedAsync(int page, int pageSize, string? search, int? businessId);
-    Task<PurchaseDetailResponse> AddWithItemsAsync(Purchase purchase, IReadOnlyList<PurchaseItem> items);
+    Task<PurchaseDetailResponse> AddWithItemsAsync(Purchase purchase, IReadOnlyList<PurchaseItem> items, SupplierPayment? supplierPayment = null);
     Task<PurchaseDetailResponse?> UpdateHeaderAsync(int id, Purchase purchase);
     Task<PurchaseDetailResponse?> AddItemAsync(int purchaseId, PurchaseItem item);
     Task<PurchaseDetailResponse?> UpdateItemAsync(int purchaseId, int itemId, PurchaseItem item);

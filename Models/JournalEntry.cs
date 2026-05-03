@@ -11,6 +11,9 @@ public class JournalEntry : BaseModel
     public int UserId { get; set; }
     public int? StationId { get; set; }
 
+    public JournalEntryKind EntryKind { get; set; } = JournalEntryKind.Normal;
+    public int? RecurringJournalEntryId { get; set; }
+
     [ValidateNever]
     public ICollection<JournalEntryLine> Lines { get; set; } = new List<JournalEntryLine>();
 }

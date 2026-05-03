@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using gas_station.Common;
 using gas_station.Data.Context;
+using gas_station.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -57,7 +58,8 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
         bid = jwtBid; return true;
     }
 
-    private IQueryable<ReportJournalLineRow> FilterLines(int bid, DateTime? from, DateTime? to, int? stationId)
+    /// <param name="trialBalanceMode">adjusted (default): exclude closing entries. unadjusted: exclude adjusting and closing. postclosing: include all.</param>
+    private IQueryable<ReportJournalLineRow> FilterLines(int bid, DateTime? from, DateTime? to, int? stationId, string? trialBalanceMode = null)
     {
         var q = db.JournalEntryLines
             .Where(l => !l.IsDeleted)
@@ -70,6 +72,12 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
             .Join(db.ChartsOfAccounts.Where(c => !c.IsDeleted),
                 x => x.a.ChartsOfAccountsId, c => c.Id,
                 (x, c) => new { x.l, x.e, x.a, c });
+
+        var mode = trialBalanceMode?.Trim().ToLowerInvariant();
+        if (mode == "unadjusted")
+            q = q.Where(x => x.e.EntryKind != JournalEntryKind.Adjusting && x.e.EntryKind != JournalEntryKind.Closing);
+        else if (mode != "postclosing")
+            q = q.Where(x => x.e.EntryKind != JournalEntryKind.Closing);
 
         if (from.HasValue) q = q.Where(x => x.e.Date >= from.Value);
         if (to.HasValue) q = q.Where(x => x.e.Date <= to.Value);
@@ -89,11 +97,16 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
     }
 
     [HttpGet("trial-balance")]
-    public IActionResult TrialBalance([FromQuery] int businessId, [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] int? stationId)
+    public IActionResult TrialBalance(
+        [FromQuery] int businessId,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] int? stationId,
+        [FromQuery] string? trialBalanceMode = null)
     {
         if (!ResolveBusiness(businessId, out var bid, out var err)) return err!;
         var stationFilter = ResolveStationFilterForReports(stationId);
-        var rows = FilterLines(bid, from, to, stationFilter)
+        var rows = FilterLines(bid, from, to, stationFilter, trialBalanceMode)
             .AsEnumerable()
             .GroupBy(x => new { x.AccountId, x.AccountCode, x.AccountName })
             .Select(g => new
@@ -111,11 +124,17 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
     }
 
     [HttpGet("general-ledger")]
-    public IActionResult GeneralLedger([FromQuery] int businessId, [FromQuery] int? accountId, [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] int? stationId)
+    public IActionResult GeneralLedger(
+        [FromQuery] int businessId,
+        [FromQuery] int? accountId,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] int? stationId,
+        [FromQuery] string? trialBalanceMode = null)
     {
         if (!ResolveBusiness(businessId, out var bid, out var err)) return err!;
         var stationFilter = ResolveStationFilterForReports(stationId);
-        var rows = FilterLines(bid, from, to, stationFilter)
+        var rows = FilterLines(bid, from, to, stationFilter, trialBalanceMode)
             .AsEnumerable()
             .Where(x => !accountId.HasValue || accountId.Value <= 0 || x.AccountId == accountId.Value)
             .OrderBy(x => x.Date)
@@ -155,11 +174,16 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
     }
 
     [HttpGet("profit-loss")]
-    public IActionResult ProfitLoss([FromQuery] int businessId, [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] int? stationId)
+    public IActionResult ProfitLoss(
+        [FromQuery] int businessId,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] int? stationId,
+        [FromQuery] string? trialBalanceMode = null)
     {
         if (!ResolveBusiness(businessId, out var bid, out var err)) return err!;
         var stationFilter = ResolveStationFilterForReports(stationId);
-        var raw = FilterLines(bid, from, to, stationFilter).AsEnumerable().ToList();
+        var raw = FilterLines(bid, from, to, stationFilter, trialBalanceMode).AsEnumerable().ToList();
 
         var byAccount = raw
             .GroupBy(x => new { x.AccountId, x.AccountCode, x.AccountName, x.AccountType })
@@ -211,11 +235,15 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
     }
 
     [HttpGet("balance-sheet")]
-    public IActionResult BalanceSheet([FromQuery] int businessId, [FromQuery] DateTime? to, [FromQuery] int? stationId)
+    public IActionResult BalanceSheet(
+        [FromQuery] int businessId,
+        [FromQuery] DateTime? to,
+        [FromQuery] int? stationId,
+        [FromQuery] string? trialBalanceMode = null)
     {
         if (!ResolveBusiness(businessId, out var bid, out var err)) return err!;
         var stationFilter = ResolveStationFilterForReports(stationId);
-        var allLines = FilterLines(bid, null, to, stationFilter).AsEnumerable().ToList();
+        var allLines = FilterLines(bid, null, to, stationFilter, trialBalanceMode).AsEnumerable().ToList();
         var assets = allLines.Where(x => string.Equals(x.AccountType, "Asset", StringComparison.OrdinalIgnoreCase))
             .Sum(x => x.Debit - x.Credit);
         var liabilities = allLines.Where(x => string.Equals(x.AccountType, "Liability", StringComparison.OrdinalIgnoreCase))

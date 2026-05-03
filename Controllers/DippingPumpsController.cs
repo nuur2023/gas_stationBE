@@ -107,4 +107,61 @@ public class DippingPumpsController(
         });
         return Ok(added);
     }
+
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, [FromBody] DippingPumpWriteRequestViewModel dto)
+    {
+        if (!TryGetUserId(out var userId, out var uerr))
+            return uerr!;
+
+        var existing = await dippingPumpRepository.GetByIdAsync(id);
+        if (existing is null)
+            return NotFound();
+
+        if (!IsSuperAdmin(User))
+        {
+            if (!TryGetJwtBusiness(out var bid)) return BadRequest("No business assigned to this user.");
+            if (bid != existing.BusinessId) return Forbid();
+        }
+
+        var targetBusinessId = existing.BusinessId;
+
+        var nozzle = await nozzleRepository.GetByIdAsync(dto.NozzleId);
+        if (nozzle is null || nozzle.BusinessId != targetBusinessId || nozzle.StationId != dto.StationId)
+            return BadRequest("Nozzle does not match selected business/station.");
+
+        var dip = await dippingRepository.GetByIdAsync(dto.DippingId);
+        if (dip is null || dip.BusinessId != targetBusinessId || dip.StationId != dto.StationId)
+            return BadRequest("Dipping does not match selected business/station.");
+
+        var other = await dippingPumpRepository.GetFirstByNozzleIdAsync(dto.NozzleId);
+        if (other is not null && other.Id != id)
+            return Conflict("That nozzle already has a dipping link.");
+
+        existing.NozzleId = dto.NozzleId;
+        existing.DippingId = dto.DippingId;
+        existing.StationId = dto.StationId;
+        existing.UserId = userId;
+        return Ok(await dippingPumpRepository.UpdateAsync(id, existing));
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        if (!TryGetUserId(out _, out var uerr))
+            return uerr!;
+
+        var existing = await dippingPumpRepository.GetByIdAsync(id);
+        if (existing is null)
+            return NotFound();
+
+        if (!IsSuperAdmin(User))
+        {
+            if (!TryGetJwtBusiness(out var bid)) return BadRequest("No business assigned to this user.");
+            if (bid != existing.BusinessId) return Forbid();
+        }
+
+        await dippingPumpRepository.SoftDeleteByIdAsync(id);
+        return NoContent();
+    }
 }

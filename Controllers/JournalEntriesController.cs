@@ -3,6 +3,7 @@ using System.Security.Claims;
 using gas_station.Common;
 using gas_station.Data.Context;
 using gas_station.Data.Interfaces;
+using gas_station.Models;
 using gas_station.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -172,17 +173,27 @@ public class JournalEntriesController(
         if (Math.Round(debit, 2) != Math.Round(credit, 2))
             return BadRequest("Journal entry must be balanced (total debit equals total credit).");
 
+        var journalDate = dto.Date?.UtcDateTime ?? DateTime.UtcNow;
+        var kind = JournalEntryKind.Normal;
+        if (dto.EntryKind is { } ek && ek <= (byte)JournalEntryKind.RecurringAuto)
+            kind = (JournalEntryKind)ek;
+
+        if (await AccountingPeriodGuard.IsPostingBlockedAsync(dbContext, bid, journalDate, kind))
+            return BadRequest("The journal date falls in a closed accounting period.");
+
         await using var tx = await dbContext.Database.BeginTransactionAsync();
         try
         {
             var row = await AccountingPostingHelper.CreateJournalEntryAsync(
                 dbContext,
-                dto.Date?.UtcDateTime ?? DateTime.UtcNow,
+                journalDate,
                 dto.Description.Trim(),
                 bid,
                 userId,
                 dto.StationId,
-                parsed);
+                parsed,
+                kind,
+                null);
             await tx.CommitAsync();
             return Ok(await repository.GetByIdAsync(row.Id));
         }

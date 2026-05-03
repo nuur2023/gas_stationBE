@@ -14,4 +14,6 @@ public interface IBusinessFuelInventoryLedgerRepository
     Task<TransferInventoryDto?> UpdateTransferAsync(int id, int businessId, int toStationId, double liters, DateTime date, string? note, int userId, string reason);
     Task<bool> SoftDeleteTransferAsync(int id, int businessId, int userId, string reason);
     Task<List<TransferInventoryAuditDto>> GetTransferAuditAsync(int transferId, int businessId);
+    Task<PagedResult<TransferInventoryAuditListRowDto>> GetTransferAuditsPagedForBusinessAsync(
+        int businessId, int page, int pageSize, string? search);
 }

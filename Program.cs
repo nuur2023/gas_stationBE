@@ -139,6 +139,7 @@ using gas_station.Data.Context;
 using gas_station.Data.Interfaces;
 using gas_station.Data.Repository;
 using gas_station.Data.Seeds;
+using gas_station.Services;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -228,12 +229,15 @@ builder.Services.AddScoped<IDippingRepository, DippingRepository>();
 builder.Services.AddScoped<ILiterReceivedRepository, LiterReceivedRepository>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 builder.Services.AddScoped<IPurchaseRepository, PurchaseRepository>();
+builder.Services.AddScoped<ISupplierPaymentRepository, SupplierPaymentRepository>();
 builder.Services.AddScoped<ICustomerFuelGivenRepository, CustomerFuelGivenRepository>();
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IJournalEntryRepository, JournalEntryRepository>();
 builder.Services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IBusinessFuelInventoryLedgerRepository, BusinessFuelInventoryLedgerRepository>();
+builder.Services.AddScoped<PeriodCloseService>();
+builder.Services.AddHostedService<RecurringJournalHostedService>();
 
 // -------------------- FORWARDED HEADERS --------------------
 builder.Services.Configure<ForwardedHeadersOptions>(options =>

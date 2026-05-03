@@ -20,6 +20,9 @@ public class DippingPumpRepository(GasStationDBContext context) : IDippingPumpRe
         return dipId <= 0 ? null : dipId;
     }
 
+    public Task<DippingPump?> GetByIdAsync(int id) =>
+        Set.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+
     public Task<DippingPump?> GetFirstByNozzleIdAsync(int nozzleId) =>
         Set.Where(x => !x.IsDeleted && x.NozzleId == nozzleId).OrderBy(x => x.Id).FirstOrDefaultAsync();
 
@@ -41,6 +44,15 @@ public class DippingPumpRepository(GasStationDBContext context) : IDippingPumpRe
         existing.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
         return existing;
+    }
+
+    public async Task SoftDeleteByIdAsync(int id)
+    {
+        var e = await Set.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+        if (e is null) return;
+        e.IsDeleted = true;
+        e.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
     }
 
     public async Task SoftDeleteByNozzleIdAsync(int nozzleId)

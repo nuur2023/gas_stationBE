@@ -256,6 +256,18 @@ public class BusinessFuelInventoryLedgerController(IBusinessFuelInventoryLedgerR
         }
     }
 
+    [HttpGet("transfers/audit-trail")]
+    public async Task<IActionResult> GetTransferAuditTrail(
+        [FromQuery] int? businessId = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] string? q = null)
+    {
+        if (!ResolveQueryBusiness(businessId, out var bid, out var err))
+            return err!;
+        return Ok(await repository.GetTransferAuditsPagedForBusinessAsync(bid, page, pageSize, q));
+    }
+
     [HttpGet("transfers/{id:int}/audit")]
     public async Task<IActionResult> GetTransferAudit(int id, [FromQuery] int? businessId = null)
     {
