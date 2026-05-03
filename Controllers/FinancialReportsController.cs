@@ -36,13 +36,15 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
         return !string.IsNullOrEmpty(bidStr) && int.TryParse(bidStr, out businessId);
     }
 
-    private int? ResolveStationFilterForReports(int? stationId)
-    {
-        if (IsSuperAdmin(User))
-            return stationId is > 0 ? stationId.Value : null;
-
-        return ListStationFilter.ForNonSuperAdmin(User, stationId);
-    }
+    /// <summary>
+    /// Station scope for financial reports: only when the client passes <c>stationId</c> &gt; 0.
+    /// We intentionally do <b>not</b> fall back to JWT <c>station_id</c> here. Otherwise trial balance
+    /// (and COA tree) would exclude business-wide journal entries with <see cref="JournalEntry.StationId"/> null,
+    /// while the journal list often omits <c>filterStationId</c> when no workspace station is selected — balances
+    /// would show zero even though entries exist.
+    /// </summary>
+    private static int? ResolveStationFilterForReports(int? stationId) =>
+        stationId is > 0 ? stationId.Value : null;
 
     private bool ResolveBusiness(int businessId, out int bid, out IActionResult? err)
     {
@@ -121,6 +123,56 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
             .OrderBy(x => x.code)
             .ToList();
         return Ok(rows);
+    }
+
+    /// <summary>
+    /// Per-account balances for chart-of-accounts UI: normal balance sign by type (Asset/Expense/COGS = debit−credit;
+    /// Liability/Equity/Income/Revenue = credit−debit). Same journal scope as trial balance.
+    /// </summary>
+    [HttpGet("accounts-with-balances")]
+    public IActionResult AccountsWithBalances(
+        [FromQuery] int businessId,
+        [FromQuery] DateTime? to,
+        [FromQuery] int? stationId,
+        [FromQuery] string? trialBalanceMode = null)
+    {
+        if (!ResolveBusiness(businessId, out var bid, out var err)) return err!;
+        var stationFilter = ResolveStationFilterForReports(stationId);
+        var rows = FilterLines(bid, null, to, stationFilter, trialBalanceMode)
+            .AsEnumerable()
+            .GroupBy(x => new { x.AccountId, x.AccountCode, x.AccountName, x.AccountType })
+            .Select(g =>
+            {
+                var debit = g.Sum(x => x.Debit);
+                var credit = g.Sum(x => x.Credit);
+                var balance = DisplayBalanceForCoaTree(g.Key.AccountType, debit, credit);
+                return new
+                {
+                    id = g.Key.AccountId,
+                    name = g.Key.AccountName,
+                    code = g.Key.AccountCode,
+                    type = g.Key.AccountType,
+                    balance,
+                };
+            })
+            .OrderBy(x => x.code)
+            .ToList();
+        return Ok(rows);
+    }
+
+    /// <summary>Statement-style balance for tree display (positive = normal balance for that type).</summary>
+    private static double DisplayBalanceForCoaTree(string? accountType, double debit, double credit)
+    {
+        if (string.Equals(accountType, "Asset", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(accountType, "Expense", StringComparison.OrdinalIgnoreCase)
+            || IsCogsType(accountType))
+            return debit - credit;
+        if (string.Equals(accountType, "Liability", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(accountType, "Equity", StringComparison.OrdinalIgnoreCase)
+            || IsIncomeType(accountType)
+            || string.Equals(accountType, "Revenue", StringComparison.OrdinalIgnoreCase))
+            return credit - debit;
+        return debit - credit;
     }
 
     [HttpGet("general-ledger")]

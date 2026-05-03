@@ -232,5 +232,11 @@ public class LiterReceivedWriteRequestViewModel
 
     public DateTimeOffset? RecordedAt { get; set; }
 
+    /// <summary>Out flow only: when true with <see cref="ConfirmTransferInventoryId"/>, marks that pool transfer as received.</summary>
+    public bool ConfirmBusinessPoolTransferReceived { get; set; }
+
+    /// <summary>Pending <c>TransferInventory</c> id to mark received (Out flow).</summary>
+    public int? ConfirmTransferInventoryId { get; set; }
+
 }
 

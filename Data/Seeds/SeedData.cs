@@ -54,9 +54,7 @@ public static class SeedData
         // await EnsureInventoryFuelPriceColumnsAsync(context);
         // await EnsureDippingPumpNavAndAdminPermissionsAsync(context);
         // await EnsurePumpNozzlesSubmenuAsync(context);
-        }
-
-        await EnsureSupplierPaymentsSubmenuAsync(context);
+    }
     }
 
     /// <summary>
@@ -376,37 +374,6 @@ public static class SeedData
     }
 
     /// <summary>
-    /// Ensures the Purchases menu has a Supplier payments submenu (<c>/supplier-payments</c>) for permissions and nav.
-    /// </summary>
-    private static async Task EnsureSupplierPaymentsSubmenuAsync(GasStationDBContext context)
-    {
-        const string purchasesRoute = "/purchases";
-        const string supplierPaymentsRoute = "/supplier-payments";
-        var now = DateTime.UtcNow;
-
-        var purchasesMenu = await context.Menus
-            .FirstOrDefaultAsync(m => !m.IsDeleted && m.Route.Trim() == purchasesRoute);
-
-        if (purchasesMenu == null)
-            return;
-
-        var exists = await context.SubMenus.AsNoTracking()
-            .AnyAsync(s => !s.IsDeleted && s.MenuId == purchasesMenu.Id && s.Route.Trim() == supplierPaymentsRoute);
-        if (exists)
-            return;
-
-        context.SubMenus.Add(new SubMenu
-        {
-            MenuId = purchasesMenu.Id,
-            Name = "Supplier payments",
-            Route = supplierPaymentsRoute,
-            CreatedAt = now,
-            UpdatedAt = now,
-        });
-        await context.SaveChangesAsync();
-    }
-
-    /// <summary>
     /// Inserts canonical menus/submenus when the Menus table is empty (e.g. first run or fresh DB).
     /// </summary>
     private static async Task EnsureDefaultMenusAsync(GasStationDBContext context)
@@ -436,7 +403,6 @@ public static class SeedData
             SubMenus =
             [
                 new SubMenu { Name = "Purchases", Route = "/purchases", CreatedAt = now, UpdatedAt = now },
-                new SubMenu { Name = "Supplier payments", Route = "/supplier-payments", CreatedAt = now, UpdatedAt = now },
             ],
         };
 
@@ -461,11 +427,8 @@ public static class SeedData
             SubMenus =
             [
                 new SubMenu { Name = "Accounts", Route = "/accounting/accounts", CreatedAt = now, UpdatedAt = now },
-                new SubMenu { Name = "COA tree", Route = "/accounting/chart-of-accounts-tree", CreatedAt = now, UpdatedAt = now },
                 new SubMenu { Name = "Charts of accounts", Route = "/accounting/charts-of-accounts", CreatedAt = now, UpdatedAt = now },
                 new SubMenu { Name = "Manual journal entry", Route = "/accounting/manual-journal-entry", CreatedAt = now, UpdatedAt = now },
-                new SubMenu { Name = "Recurring journals", Route = "/accounting/recurring-journals", CreatedAt = now, UpdatedAt = now },
-                new SubMenu { Name = "Accounting periods", Route = "/accounting/periods", CreatedAt = now, UpdatedAt = now },
             ],
         };
 
@@ -560,9 +523,6 @@ public static class SeedData
             ("Settings", "/setup/settings", "Settings"),
             ("Business fuel pool", "/fuel-inventory", "Business fuel pool"),
             ("Transfer fuels", "/transfers", "Transfer fuels"),
-            ("Transfer audit trail", "/transfer-audit-trail", "Transfer audit trail"),
-            ("Recurring journals", "/accounting/recurring-journals", "Recurring journals"),
-            ("Accounting periods", "/accounting/periods", "Accounting periods"),
             // ("Reports", "/reports/outstanding-customers", "Outstanding customers"),
         ];
 

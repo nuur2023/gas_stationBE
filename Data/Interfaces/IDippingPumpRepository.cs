@@ -4,8 +4,8 @@ namespace gas_station.Data.Interfaces;
 
 public interface IDippingPumpRepository
 {
-    Task<int?> GetDippingIdByNozzleIdAsync(int nozzleId);
     Task<DippingPump?> GetByIdAsync(int id);
+    Task<int?> GetDippingIdByNozzleIdAsync(int nozzleId);
     Task<DippingPump?> GetFirstByNozzleIdAsync(int nozzleId);
     Task<DippingPump> AddAsync(DippingPump entity);
     Task<DippingPump> UpdateAsync(int id, DippingPump entity);

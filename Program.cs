@@ -156,6 +156,7 @@ builder.Services.AddControllers().AddJsonOptions(o =>
 {
     o.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     o.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+    o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
 });
 
 builder.Services.AddEndpointsApiExplorer();
@@ -236,6 +237,7 @@ builder.Services.AddScoped<IJournalEntryRepository, JournalEntryRepository>();
 builder.Services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IBusinessFuelInventoryLedgerRepository, BusinessFuelInventoryLedgerRepository>();
+builder.Services.AddScoped<INotificationsRepository, NotificationsRepository>();
 builder.Services.AddScoped<PeriodCloseService>();
 builder.Services.AddHostedService<RecurringJournalHostedService>();
 

@@ -22,7 +22,7 @@ public sealed class RecurringJournalHostedService(
             {
                 using var scope = scopeFactory.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<GasStationDBContext>();
-                await ProcessDueAsync(db, stoppingToken);
+                await ProcessDueAsync(db, stoppingToken, logger);
             }
             catch (Exception ex)
             {
@@ -40,20 +40,24 @@ public sealed class RecurringJournalHostedService(
         }
     }
 
-    internal static async Task ProcessDueAsync(GasStationDBContext db, CancellationToken cancellationToken)
+    internal static async Task ProcessDueAsync(
+        GasStationDBContext db,
+        CancellationToken cancellationToken,
+        ILogger<RecurringJournalHostedService>? logger = null)
     {
         var today = DateTime.UtcNow.Date;
-        var list = await db.RecurringJournalEntries
-            .Include(x => x.DebitAccount).ThenInclude(a => a.ChartsOfAccounts)
-            .Include(x => x.CreditAccount).ThenInclude(a => a.ChartsOfAccounts)
-            .Where(x => !x.IsDeleted && x.AutoPost && !x.IsPaused
+
+        var silentList = await db.RecurringJournalEntries
+            .Include(x => x.DebitAccount).ThenInclude(a => a.ChartsOfAccounts!)
+            .Include(x => x.CreditAccount).ThenInclude(a => a.ChartsOfAccounts!)
+            .Where(x => !x.IsDeleted && x.AutoPost && !x.IsPaused && !x.ConfirmWhenDue
                                          && x.NextRunDate != null
                                          && x.NextRunDate.Value.Date <= today
                                          && x.StartDate.Date <= today
                                          && (x.EndDate == null || x.EndDate.Value.Date >= today))
             .ToListAsync(cancellationToken);
 
-        foreach (var r in list)
+        foreach (var r in silentList)
         {
             if (r.LastRunDate?.Date == today)
                 continue;
@@ -67,55 +71,42 @@ public sealed class RecurringJournalHostedService(
                 continue;
             }
 
-            var amt = r.Amount;
-            if (amt <= 0) continue;
-
-            int? cust = r.CustomerFuelGivenId;
-            int? supp = r.SupplierId;
-            if (AccountingSubledgerRules.IsAccountsReceivable(r.DebitAccount) && cust is null or <= 0)
-                continue;
-            if (AccountingSubledgerRules.IsAccountsPayable(r.DebitAccount) && supp is null or <= 0)
-                continue;
-            if (!AccountingSubledgerRules.IsAccountsReceivable(r.DebitAccount) && cust is > 0)
-                cust = null;
-            var debitType = r.DebitAccount.ChartsOfAccounts?.Type ?? "";
-            var allowSupplierOnDebit = AccountingSubledgerRules.IsAccountsPayable(r.DebitAccount)
-                                       || string.Equals(debitType, "Expense", StringComparison.OrdinalIgnoreCase)
-                                       || string.Equals(debitType, "COGS", StringComparison.OrdinalIgnoreCase);
-            if (!allowSupplierOnDebit && supp is > 0)
-                supp = null;
-
-            var lines = new List<(int accountId, double debit, double credit, string? remark, int? customerId, int? supplierId)>
-            {
-                (r.DebitAccountId, amt, 0, r.Name, cust, supp),
-                (r.CreditAccountId, 0, amt, r.Name, null, null),
-            };
-
-            await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
             try
             {
-                await AccountingPostingHelper.CreateJournalEntryAsync(
+                await RecurringJournalPostingHelper.PostAndAdvanceAsync(
                     db,
+                    r,
                     runDate,
-                    $"Recurring: {r.Name}",
-                    r.BusinessId,
-                    r.PostingUserId,
-                    r.StationId,
-                    lines,
+                    r.Amount,
                     JournalEntryKind.RecurringAuto,
-                    r.Id);
-
-                r.LastRunDate = today;
-                r.NextRunDate = RecurringJournalSchedule.ComputeNextRunUtc(r.Frequency, runDate);
-                r.UpdatedAt = DateTime.UtcNow;
-                await db.SaveChangesAsync(cancellationToken);
-                await tx.CommitAsync(cancellationToken);
+                    cancellationToken);
             }
-            catch
+            catch (InvalidOperationException ex)
             {
-                await tx.RollbackAsync(cancellationToken);
-                throw;
+                logger?.LogWarning(
+                    ex,
+                    "Recurring journal entry {RecurringId} was not posted this cycle: {Message}",
+                    r.Id,
+                    ex.Message);
             }
+        }
+
+        var confirmMarkList = await db.RecurringJournalEntries
+            .Where(x => !x.IsDeleted && x.AutoPost && !x.IsPaused && x.ConfirmWhenDue
+                                         && x.PendingConfirmationRunDate == null
+                                         && x.NextRunDate != null
+                                         && x.NextRunDate.Value.Date <= today
+                                         && x.StartDate.Date <= today
+                                         && (x.EndDate == null || x.EndDate.Value.Date >= today))
+            .ToListAsync(cancellationToken);
+
+        foreach (var r in confirmMarkList)
+        {
+            var runDate = r.NextRunDate!.Value;
+            // Do not skip when the period is closed — user confirms later; confirm-post enforces the period guard.
+            r.PendingConfirmationRunDate = runDate;
+            r.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync(cancellationToken);
         }
     }
 }

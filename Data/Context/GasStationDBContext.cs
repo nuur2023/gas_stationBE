@@ -9,7 +9,48 @@ namespace gas_station.Data.Context;
 /// </summary>
 public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) : DbContext(options)
 {
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+
+    public DbSet<Business> Businesses => Set<Business>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<Menu> Menus => Set<Menu>();
+    public DbSet<SubMenu> SubMenus => Set<SubMenu>();
+    public DbSet<Permission> Permissions => Set<Permission>();
+    public DbSet<FuelType> FuelTypes => Set<FuelType>();
+    public DbSet<User> Users => Set<User>();
+    public DbSet<BusinessUser> BusinessUsers => Set<BusinessUser>();
+    public DbSet<Rate> Rates => Set<Rate>();
+    public DbSet<Pump> Pumps => Set<Pump>();
+    public DbSet<Nozzle> Nozzles => Set<Nozzle>();
+    public DbSet<DippingPump> DippingPumps => Set<DippingPump>();
+    public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<InventorySale> InventorySales => Set<InventorySale>();
+    public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
+    public DbSet<GeneratorUsage> GeneratorUsages => Set<GeneratorUsage>();
+    public DbSet<Station> Stations => Set<Station>();
+    public DbSet<Dipping> Dippings => Set<Dipping>();
+    public DbSet<LiterReceived> LiterReceiveds => Set<LiterReceived>();
+    public DbSet<Supplier> Suppliers => Set<Supplier>();
+    public DbSet<Purchase> Purchases => Set<Purchase>();
+    public DbSet<PurchaseItem> PurchaseItems => Set<PurchaseItem>();
+    public DbSet<Currency> Currencies => Set<Currency>();
+    public DbSet<FuelPrice> FuelPrices => Set<FuelPrice>();
+    public DbSet<CustomerFuelGiven> CustomerFuelGivens => Set<CustomerFuelGiven>();
+    public DbSet<ChartsOfAccounts> ChartsOfAccounts => Set<ChartsOfAccounts>();
+    public DbSet<Account> Accounts => Set<Account>();
+    public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
+    public DbSet<JournalEntryLine> JournalEntryLines => Set<JournalEntryLine>();
+    public DbSet<CustomerPayment> CustomerPayments => Set<CustomerPayment>();
+    public DbSet<BusinessFuelInventory> BusinessFuelInventories => Set<BusinessFuelInventory>();
+    public DbSet<BusinessFuelInventoryCredit> BusinessFuelInventoryCredits => Set<BusinessFuelInventoryCredit>();
+    public DbSet<TransferInventory> TransferInventories => Set<TransferInventory>();
+    public DbSet<TransferInventoryAudit> TransferInventoryAudits => Set<TransferInventoryAudit>();
+    public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
+    public DbSet<AccountingPeriod> AccountingPeriods => Set<AccountingPeriod>();
+    public DbSet<RecurringJournalEntry> RecurringJournalEntries => Set<RecurringJournalEntry>();
+    public DbSet<AppNotification> AppNotifications => Set<AppNotification>();
+    public DbSet<AppNotificationRead> AppNotificationReads => Set<AppNotificationRead>();
+
+       protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<JournalEntryLine>(e =>
         {
@@ -140,76 +181,7 @@ public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) 
             e.Property(x => x.Action).HasMaxLength(32);
             e.Property(x => x.Reason).HasMaxLength(2000);
             e.HasIndex(x => new { x.TransferInventoryId, x.ChangedAt });
-            e.HasIndex(x => x.BusinessId);
-        });
-
-        modelBuilder.Entity<AccountingPeriod>(e =>
-        {
-            e.HasOne<Business>()
-                .WithMany()
-                .HasForeignKey(x => x.BusinessId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            e.Property(x => x.Name).HasMaxLength(128);
-            e.HasIndex(x => new { x.BusinessId, x.PeriodStart, x.PeriodEnd }).IsUnique();
-        });
-
-        modelBuilder.Entity<RecurringJournalEntry>(e =>
-        {
-            e.HasOne<Business>()
-                .WithMany()
-                .HasForeignKey(x => x.BusinessId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            e.HasOne(x => x.DebitAccount)
-                .WithMany()
-                .HasForeignKey(x => x.DebitAccountId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            e.HasOne(x => x.CreditAccount)
-                .WithMany()
-                .HasForeignKey(x => x.CreditAccountId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            e.HasOne<Supplier>()
-                .WithMany()
-                .HasForeignKey(x => x.SupplierId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            e.HasOne<CustomerFuelGiven>()
-                .WithMany()
-                .HasForeignKey(x => x.CustomerFuelGivenId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            e.HasOne<User>()
-                .WithMany()
-                .HasForeignKey(x => x.PostingUserId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            e.HasOne(x => x.Station)
-                .WithMany()
-                .HasForeignKey(x => x.StationId)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            e.Property(x => x.Name).HasMaxLength(256);
-            e.HasIndex(x => new { x.BusinessId, x.NextRunDate });
-            e.HasIndex(x => x.StationId);
-        });
-
-        modelBuilder.Entity<JournalEntry>(e =>
-        {
-            e.HasOne<RecurringJournalEntry>()
-                .WithMany()
-                .HasForeignKey(x => x.RecurringJournalEntryId)
-                .OnDelete(DeleteBehavior.SetNull);
-        });
-
-        modelBuilder.Entity<Business>(e =>
-        {
-            e.HasOne<Account>()
-                .WithMany()
-                .HasForeignKey(x => x.RetainedEarningsAccountId)
-                .OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(x => new { x.BusinessId, x.ChangedAt });
         });
 
         modelBuilder.Entity<SupplierPayment>(e =>
@@ -224,46 +196,92 @@ public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) 
                 .HasForeignKey(x => x.BusinessId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            e.Property(x => x.ReferenceNo).HasMaxLength(128);
+            e.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.Property(x => x.ReferenceNo).HasMaxLength(256);
             e.HasIndex(x => new { x.BusinessId, x.Date });
         });
-    }
 
-    public DbSet<Business> Businesses => Set<Business>();
-    public DbSet<Role> Roles => Set<Role>();
-    public DbSet<Menu> Menus => Set<Menu>();
-    public DbSet<SubMenu> SubMenus => Set<SubMenu>();
-    public DbSet<Permission> Permissions => Set<Permission>();
-    public DbSet<FuelType> FuelTypes => Set<FuelType>();
-    public DbSet<User> Users => Set<User>();
-    public DbSet<BusinessUser> BusinessUsers => Set<BusinessUser>();
-    public DbSet<Rate> Rates => Set<Rate>();
-    public DbSet<Pump> Pumps => Set<Pump>();
-    public DbSet<Nozzle> Nozzles => Set<Nozzle>();
-    public DbSet<DippingPump> DippingPumps => Set<DippingPump>();
-    public DbSet<Expense> Expenses => Set<Expense>();
-    public DbSet<InventorySale> InventorySales => Set<InventorySale>();
-    public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
-    public DbSet<GeneratorUsage> GeneratorUsages => Set<GeneratorUsage>();
-    public DbSet<Station> Stations => Set<Station>();
-    public DbSet<Dipping> Dippings => Set<Dipping>();
-    public DbSet<LiterReceived> LiterReceiveds => Set<LiterReceived>();
-    public DbSet<Supplier> Suppliers => Set<Supplier>();
-    public DbSet<Purchase> Purchases => Set<Purchase>();
-    public DbSet<PurchaseItem> PurchaseItems => Set<PurchaseItem>();
-    public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
-    public DbSet<Currency> Currencies => Set<Currency>();
-    public DbSet<FuelPrice> FuelPrices => Set<FuelPrice>();
-    public DbSet<CustomerFuelGiven> CustomerFuelGivens => Set<CustomerFuelGiven>();
-    public DbSet<ChartsOfAccounts> ChartsOfAccounts => Set<ChartsOfAccounts>();
-    public DbSet<Account> Accounts => Set<Account>();
-    public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
-    public DbSet<JournalEntryLine> JournalEntryLines => Set<JournalEntryLine>();
-    public DbSet<CustomerPayment> CustomerPayments => Set<CustomerPayment>();
-    public DbSet<BusinessFuelInventory> BusinessFuelInventories => Set<BusinessFuelInventory>();
-    public DbSet<BusinessFuelInventoryCredit> BusinessFuelInventoryCredits => Set<BusinessFuelInventoryCredit>();
-    public DbSet<TransferInventory> TransferInventories => Set<TransferInventory>();
-    public DbSet<TransferInventoryAudit> TransferInventoryAudits => Set<TransferInventoryAudit>();
-    public DbSet<AccountingPeriod> AccountingPeriods => Set<AccountingPeriod>();
-    public DbSet<RecurringJournalEntry> RecurringJournalEntries => Set<RecurringJournalEntry>();
+        modelBuilder.Entity<AccountingPeriod>(e =>
+        {
+            e.HasOne<Business>()
+                .WithMany()
+                .HasForeignKey(x => x.BusinessId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.Property(x => x.Name).HasMaxLength(256);
+            e.HasIndex(x => new { x.BusinessId, x.PeriodStart, x.PeriodEnd });
+        });
+
+        modelBuilder.Entity<RecurringJournalEntry>(e =>
+        {
+            e.HasOne(x => x.DebitAccount)
+                .WithMany()
+                .HasForeignKey(x => x.DebitAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(x => x.CreditAccount)
+                .WithMany()
+                .HasForeignKey(x => x.CreditAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<Business>()
+                .WithMany()
+                .HasForeignKey(x => x.BusinessId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(x => x.Station)
+                .WithMany()
+                .HasForeignKey(x => x.StationId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.Property(x => x.Name).HasMaxLength(256);
+            e.HasIndex(x => new { x.BusinessId, x.NextRunDate });
+        });
+
+        modelBuilder.Entity<AppNotification>(e =>
+        {
+            e.HasOne<Business>()
+                .WithMany()
+                .HasForeignKey(x => x.BusinessId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<Station>()
+                .WithMany()
+                .HasForeignKey(x => x.StationId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.ConfirmedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<TransferInventory>()
+                .WithMany()
+                .HasForeignKey(x => x.TransferInventoryId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            e.Property(x => x.Title).HasMaxLength(256);
+            e.Property(x => x.Body).HasMaxLength(4000);
+            e.HasIndex(x => new { x.BusinessId, x.CreatedAt });
+        });
+
+        modelBuilder.Entity<AppNotificationRead>(e =>
+        {
+            e.HasOne(x => x.AppNotification)
+                .WithMany()
+                .HasForeignKey(x => x.AppNotificationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasIndex(x => new { x.AppNotificationId, x.UserId }).IsUnique();
+        });
+    }
 }

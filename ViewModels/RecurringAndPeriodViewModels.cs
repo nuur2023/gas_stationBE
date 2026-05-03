@@ -15,9 +15,22 @@ public class RecurringJournalEntryWriteViewModel
     public DateTimeOffset? EndDate { get; set; }
     public bool AutoPost { get; set; } = true;
     public bool IsPaused { get; set; }
+    /// <summary>When true, user must confirm (and may edit amount) when a run is due instead of silent auto-post.</summary>
+    public bool ConfirmWhenDue { get; set; }
     public int? SupplierId { get; set; }
     public int? CustomerFuelGivenId { get; set; }
     public int PostingUserId { get; set; }
+}
+
+public class RecurringJournalConfirmPostViewModel
+{
+    public int BusinessId { get; set; }
+    public string Amount { get; set; } = "0";
+}
+
+public class RecurringJournalEnsurePendingViewModel
+{
+    public int BusinessId { get; set; }
 }
 
 public class AccountingPeriodWriteViewModel

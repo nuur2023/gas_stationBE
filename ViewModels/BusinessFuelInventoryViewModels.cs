@@ -1,3 +1,5 @@
+using gas_station.Models;
+
 namespace gas_station.ViewModels;
 
 public class BusinessFuelInventoryBalanceDto
@@ -37,6 +39,7 @@ public class TransferInventoryDto
     public int CreatorId { get; set; }
     public string? CreatorName { get; set; }
     public string? Note { get; set; }
+    public TransferInventoryStatus Status { get; set; }
 }
 
 public class TransferInventoryAuditDto

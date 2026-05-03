@@ -9,4 +9,6 @@ public class TransferInventory : BaseModel
     public DateTime Date { get; set; }
     public int CreatorId { get; set; }
     public string? Note { get; set; }
+
+    public TransferInventoryStatus Status { get; set; } = TransferInventoryStatus.Pending;
 }

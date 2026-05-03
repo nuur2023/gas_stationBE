@@ -11,6 +11,11 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
 {
     private readonly GasStationDBContext _context = context;
 
+    private sealed record TransferSnapshot(int ToStationId, double Liters, DateTime Date, string? Note);
+
+    private static bool LitersMatch(double expected, double actual) =>
+        Math.Abs(expected - actual) < 0.000_001;
+
     public async Task<List<BusinessFuelInventoryBalanceDto>> GetBalancesAsync(int businessId)
     {
         return await (
@@ -56,7 +61,11 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
         return new PagedResult<BusinessFuelInventoryCreditDto>(items, total, page, pageSize);
     }
 
-    public async Task<PagedResult<TransferInventoryDto>> GetTransfersPagedAsync(int businessId, int page, int pageSize)
+    public async Task<PagedResult<TransferInventoryDto>> GetTransfersPagedAsync(
+        int businessId,
+        int page,
+        int pageSize,
+        TransferInventoryStatus? status)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 200);
@@ -67,6 +76,7 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
             join u in _context.Users.AsNoTracking() on t.CreatorId equals u.Id into uj
             from u in uj.DefaultIfEmpty()
             where !t.IsDeleted && !b.IsDeleted && !f.IsDeleted && !s.IsDeleted && b.BusinessId == businessId
+            where status == null || t.Status == status
             orderby t.Date descending, t.Id descending
             select new TransferInventoryDto
             {
@@ -82,6 +92,7 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
                 CreatorId = t.CreatorId,
                 CreatorName = u != null ? u.Name : null,
                 Note = t.Note,
+                Status = t.Status,
             };
         var total = await q.CountAsync();
         var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
@@ -257,10 +268,10 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
                 Action = "Created",
                 ChangedAt = now,
                 ChangedByUserId = creatorId,
+                Reason = null,
                 ToStationId = transfer.ToStationId,
                 Liters = transfer.Liters,
                 Date = transfer.Date,
-                Reason = null,
                 BusinessId = businessId,
                 CreatedAt = now,
                 UpdatedAt = now,
@@ -307,6 +318,7 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
                 .FirstOrDefaultAsync(x => x.Id == transfer.BusinessFuelInventoryId && !x.IsDeleted);
             if (balance is null || balance.BusinessId != businessId) return null;
 
+            var before = new TransferSnapshot(transfer.ToStationId, transfer.Liters, transfer.Date, transfer.Note);
             var oldLiters = transfer.Liters;
 
             balance.Liters += oldLiters;
@@ -332,10 +344,10 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
                 Action = "Updated",
                 ChangedAt = now,
                 ChangedByUserId = userId,
+                Reason = reason.Trim(),
                 ToStationId = transfer.ToStationId,
                 Liters = transfer.Liters,
                 Date = transfer.Date,
-                Reason = reason.Trim(),
                 BusinessId = businessId,
                 CreatedAt = now,
                 UpdatedAt = now,
@@ -368,13 +380,10 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
                 .FirstOrDefaultAsync(x => x.Id == transfer.BusinessFuelInventoryId && !x.IsDeleted);
             if (balance is null || balance.BusinessId != businessId) return false;
 
+            var before = new TransferSnapshot(transfer.ToStationId, transfer.Liters, transfer.Date, transfer.Note);
             var now = DateTime.UtcNow;
             balance.Liters += transfer.Liters;
             balance.UpdatedAt = now;
-
-            var delToStationId = transfer.ToStationId;
-            var delLiters = transfer.Liters;
-            var delDate = transfer.Date;
 
             transfer.IsDeleted = true;
             transfer.UpdatedAt = now;
@@ -385,10 +394,10 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
                 Action = "Deleted",
                 ChangedAt = now,
                 ChangedByUserId = userId,
-                ToStationId = delToStationId,
-                Liters = delLiters,
-                Date = delDate,
                 Reason = reason.Trim(),
+                ToStationId = before.ToStationId,
+                Liters = before.Liters,
+                Date = before.Date,
                 BusinessId = businessId,
                 CreatedAt = now,
                 UpdatedAt = now,
@@ -427,69 +436,163 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
                 ChangedAt = a.ChangedAt,
                 ChangedByUserId = a.ChangedByUserId,
                 ChangedByName = u != null ? u.Name : null,
+                Reason = a.Reason,
                 ToStationId = a.ToStationId,
                 Liters = a.Liters,
                 Date = a.Date,
-                Reason = a.Reason,
                 BusinessId = a.BusinessId,
             }).ToListAsync();
     }
 
+    public async Task<List<TransferPendingConfirmDto>> GetPendingTransfersForConfirmAsync(
+        int businessId,
+        int toStationId,
+        int fuelTypeId)
+    {
+        return await (
+            from t in _context.TransferInventories.AsNoTracking()
+            join b in _context.BusinessFuelInventories.AsNoTracking() on t.BusinessFuelInventoryId equals b.Id
+            join f in _context.FuelTypes.AsNoTracking() on b.FuelTypeId equals f.Id
+            join s in _context.Stations.AsNoTracking() on t.ToStationId equals s.Id
+            where !t.IsDeleted && !b.IsDeleted && !f.IsDeleted && !s.IsDeleted
+                  && b.BusinessId == businessId
+                  && t.ToStationId == toStationId
+                  && b.FuelTypeId == fuelTypeId
+                  && t.Status == TransferInventoryStatus.Pending
+            orderby t.Date descending, t.Id descending
+            select new TransferPendingConfirmDto
+            {
+                Id = t.Id,
+                Liters = t.Liters,
+                Date = t.Date,
+                FuelName = f.FuelName,
+                StationName = s.Name,
+            }).ToListAsync();
+    }
+
+    public async Task<string?> TryMarkTransferReceivedAsync(
+        int transferId,
+        int businessId,
+        int fuelTypeId,
+        int toStationId,
+        double liters,
+        int userId)
+    {
+        if (liters <= 0) return "Liters must be greater than zero.";
+
+        var transfer = await _context.TransferInventories
+            .FirstOrDefaultAsync(x => x.Id == transferId && !x.IsDeleted);
+        if (transfer is null) return "Transfer not found.";
+        if (transfer.Status != TransferInventoryStatus.Pending) return "This transfer is not awaiting receipt.";
+
+        var balance = await _context.BusinessFuelInventories
+            .FirstOrDefaultAsync(x => x.Id == transfer.BusinessFuelInventoryId && !x.IsDeleted);
+        if (balance is null || balance.BusinessId != businessId) return "Transfer does not belong to this business.";
+        if (balance.FuelTypeId != fuelTypeId) return "Fuel type does not match the selected transfer.";
+        if (transfer.ToStationId != toStationId) return "Destination station does not match the transfer.";
+        if (!LitersMatch(transfer.Liters, liters)) return "Recorded liters must match the pending pool transfer.";
+
+        var now = DateTime.UtcNow;
+        transfer.Status = TransferInventoryStatus.Received;
+        transfer.UpdatedAt = now;
+
+        _context.TransferInventoryAudits.Add(new TransferInventoryAudit
+        {
+            TransferInventoryId = transfer.Id,
+            Action = "Received",
+            ChangedAt = now,
+            ChangedByUserId = userId,
+            Reason = null,
+            ToStationId = transfer.ToStationId,
+            Liters = transfer.Liters,
+            Date = transfer.Date,
+            BusinessId = businessId,
+            CreatedAt = now,
+            UpdatedAt = now,
+            IsDeleted = false,
+        });
+
+        var fuelName = await _context.FuelTypes.AsNoTracking()
+            .Where(x => x.Id == fuelTypeId)
+            .Select(x => x.FuelName)
+            .FirstOrDefaultAsync() ?? "Fuel";
+
+        var userName = await _context.Users.AsNoTracking()
+            .Where(x => x.Id == userId)
+            .Select(x => x.Name)
+            .FirstOrDefaultAsync() ?? "User";
+
+        _context.AppNotifications.Add(new AppNotification
+        {
+            BusinessId = businessId,
+            StationId = toStationId,
+            Title = "Pool transfer marked received",
+            Body = $"{userName} confirmed receipt of {transfer.Liters:0.###} L ({fuelName}) for this station.",
+            TransferInventoryId = transfer.Id,
+            ConfirmedByUserId = userId,
+            CreatedAt = now,
+            UpdatedAt = now,
+            IsDeleted = false,
+        });
+
+        await _context.SaveChangesAsync();
+        return null;
+    }
+
     public async Task<PagedResult<TransferInventoryAuditListRowDto>> GetTransferAuditsPagedForBusinessAsync(
-        int businessId, int page, int pageSize, string? search)
+        int businessId,
+        int page,
+        int pageSize,
+        string? q)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 200);
 
-        var q =
+        var query =
             from a in _context.TransferInventoryAudits.AsNoTracking()
             join t in _context.TransferInventories.AsNoTracking() on a.TransferInventoryId equals t.Id
             join b in _context.BusinessFuelInventories.AsNoTracking() on t.BusinessFuelInventoryId equals b.Id
-            join f in _context.FuelTypes.AsNoTracking() on b.FuelTypeId equals f.Id into fj
-            from f in fj.DefaultIfEmpty()
-            join st in _context.Stations.AsNoTracking() on a.ToStationId equals st.Id into stj
-            from st in stj.DefaultIfEmpty()
-            join ch in _context.Users.AsNoTracking() on a.ChangedByUserId equals ch.Id into chj
-            from ch in chj.DefaultIfEmpty()
-            where !a.IsDeleted && a.BusinessId == businessId && !b.IsDeleted
-            select new TransferInventoryAuditListRowDto
-            {
-                Id = a.Id,
-                TransferInventoryId = a.TransferInventoryId,
-                Action = a.Action,
-                ChangedAt = a.ChangedAt,
-                ChangedByUserId = a.ChangedByUserId,
-                ChangedByName = ch != null ? ch.Name : null,
-                ToStationId = a.ToStationId,
-                Liters = a.Liters,
-                Date = a.Date,
-                Reason = a.Reason,
-                BusinessId = a.BusinessId,
-                FuelName = f != null ? f.FuelName : string.Empty,
-                StationName = st != null ? st.Name : string.Empty,
-            };
+            join f in _context.FuelTypes.AsNoTracking() on b.FuelTypeId equals f.Id
+            join s in _context.Stations.AsNoTracking() on a.ToStationId equals s.Id
+            join u in _context.Users.AsNoTracking() on a.ChangedByUserId equals u.Id into uj
+            from u in uj.DefaultIfEmpty()
+            where !a.IsDeleted && !t.IsDeleted && !b.IsDeleted && !f.IsDeleted && !s.IsDeleted && a.BusinessId == businessId
+            orderby a.ChangedAt descending, a.Id descending
+            select new { a, f.FuelName, s.Name, ChangedByName = u != null ? u.Name : null };
 
-        if (!string.IsNullOrWhiteSpace(search))
+        if (!string.IsNullOrWhiteSpace(q))
         {
-            var term = search.Trim();
-            var termLower = term.ToLowerInvariant();
-            q = q.Where(row =>
-                row.Action.ToLower().Contains(termLower) ||
-                (row.Reason != null && row.Reason.ToLower().Contains(termLower)) ||
-                (row.ChangedByName != null && row.ChangedByName.ToLower().Contains(termLower)) ||
-                row.FuelName.ToLower().Contains(termLower) ||
-                row.StationName.ToLower().Contains(termLower) ||
-                row.TransferInventoryId.ToString().Contains(term) ||
-                row.ToStationId.ToString().Contains(term));
+            var term = q.Trim();
+            query = query.Where(x =>
+                EF.Functions.Like(x.a.Action, $"%{term}%") ||
+                (x.a.Reason != null && EF.Functions.Like(x.a.Reason, $"%{term}%")) ||
+                EF.Functions.Like(x.FuelName, $"%{term}%") ||
+                EF.Functions.Like(x.Name, $"%{term}%") ||
+                (x.ChangedByName != null && EF.Functions.Like(x.ChangedByName, $"%{term}%")));
         }
 
-        var total = await q.CountAsync();
-        var items = await q
-            .OrderByDescending(row => row.ChangedAt)
-            .ThenByDescending(row => row.Id)
+        var total = await query.CountAsync();
+        var slice = await query
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();
+
+        var items = slice.Select(x => new TransferInventoryAuditListRowDto
+        {
+            Id = x.a.Id,
+            TransferInventoryId = x.a.TransferInventoryId,
+            Action = x.a.Action,
+            ChangedAt = x.a.ChangedAt,
+            ChangedByUserId = x.a.ChangedByUserId,
+            ChangedByName = x.ChangedByName,
+            ToStationId = x.a.ToStationId,
+            Liters = x.a.Liters,
+            Date = x.a.Date,
+            Reason = x.a.Reason,
+            BusinessId = x.a.BusinessId,
+            FuelName = x.FuelName,
+            StationName = x.Name,
+        }).ToList();
 
         return new PagedResult<TransferInventoryAuditListRowDto>(items, total, page, pageSize);
     }
@@ -518,6 +621,7 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
                 CreatorId = t.CreatorId,
                 CreatorName = u != null ? u.Name : null,
                 Note = t.Note,
+                Status = t.Status,
             }).FirstOrDefaultAsync();
     }
 }

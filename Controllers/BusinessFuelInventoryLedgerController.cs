@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Claims;
 using gas_station.Data.Interfaces;
+using gas_station.Models;
 using gas_station.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -118,11 +119,34 @@ public class BusinessFuelInventoryLedgerController(IBusinessFuelInventoryLedgerR
     }
 
     [HttpGet("transfers")]
-    public async Task<IActionResult> GetTransfers([FromQuery] int? businessId = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
+    public async Task<IActionResult> GetTransfers(
+        [FromQuery] int? businessId = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] string? status = null)
     {
         if (!ResolveQueryBusiness(businessId, out var bid, out var err))
             return err!;
-        return Ok(await repository.GetTransfersPagedAsync(bid, page, pageSize));
+        TransferInventoryStatus? st = status?.Trim().ToLowerInvariant() switch
+        {
+            "pending" => TransferInventoryStatus.Pending,
+            "received" => TransferInventoryStatus.Received,
+            _ => null,
+        };
+        return Ok(await repository.GetTransfersPagedAsync(bid, page, pageSize, st));
+    }
+
+    [HttpGet("transfers/pending-confirm")]
+    public async Task<IActionResult> GetPendingTransfersForConfirm(
+        [FromQuery] int? businessId = null,
+        [FromQuery] int toStationId = 0,
+        [FromQuery] int fuelTypeId = 0)
+    {
+        if (!ResolveQueryBusiness(businessId, out var bid, out var err))
+            return err!;
+        if (toStationId <= 0 || fuelTypeId <= 0)
+            return BadRequest("toStationId and fuelTypeId are required.");
+        return Ok(await repository.GetPendingTransfersForConfirmAsync(bid, toStationId, fuelTypeId));
     }
 
     [HttpPost("credits")]

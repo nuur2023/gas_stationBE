@@ -23,6 +23,15 @@ public class RecurringJournalEntry : BaseModel
     public DateTime? EndDate { get; set; }
     public bool AutoPost { get; set; } = true;
     public bool IsPaused { get; set; }
+
+    /// <summary>
+    /// When true, the background job does not post when due; it sets <see cref="PendingConfirmationRunDate"/>
+    /// until a user confirms (and may edit the amount) via the API.
+    /// </summary>
+    public bool ConfirmWhenDue { get; set; }
+
+    /// <summary>Set when this template is waiting for user confirmation for the run at this date.</summary>
+    public DateTime? PendingConfirmationRunDate { get; set; }
     public int? SupplierId { get; set; }
     /// <summary>AR subledger: CustomerFuelGiven id when debit line tags a customer.</summary>
     public int? CustomerFuelGivenId { get; set; }

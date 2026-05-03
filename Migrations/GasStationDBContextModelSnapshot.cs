@@ -93,8 +93,8 @@ namespace gas_station.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
 
                     b.Property<DateTime>("PeriodEnd")
                         .HasColumnType("datetime(6)");
@@ -110,10 +110,88 @@ namespace gas_station.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BusinessId", "PeriodStart", "PeriodEnd")
-                        .IsUnique();
+                    b.HasIndex("BusinessId", "PeriodStart", "PeriodEnd");
 
                     b.ToTable("AccountingPeriods");
+                });
+
+            modelBuilder.Entity("gas_station.Models.AppNotification", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("varchar(4000)");
+
+                    b.Property<int>("BusinessId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ConfirmedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<int>("StationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<int?>("TransferInventoryId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConfirmedByUserId");
+
+                    b.HasIndex("StationId");
+
+                    b.HasIndex("TransferInventoryId");
+
+                    b.HasIndex("BusinessId", "CreatedAt");
+
+                    b.ToTable("AppNotifications");
+                });
+
+            modelBuilder.Entity("gas_station.Models.AppNotificationRead", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AppNotificationId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ReadAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("AppNotificationId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("AppNotificationReads");
                 });
 
             modelBuilder.Entity("gas_station.Models.Business", b =>
@@ -147,8 +225,6 @@ namespace gas_station.Migrations
                         .HasColumnType("datetime(6)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("RetainedEarningsAccountId");
 
                     b.ToTable("Businesses");
                 });
@@ -837,8 +913,6 @@ namespace gas_station.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RecurringJournalEntryId");
-
                     b.ToTable("JournalEntries");
                 });
 
@@ -1191,49 +1265,6 @@ namespace gas_station.Migrations
                     b.ToTable("PurchaseItems");
                 });
 
-            modelBuilder.Entity("gas_station.Models.SupplierPayment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<double>("Amount")
-                        .HasColumnType("double");
-
-                    b.Property<int>("BusinessId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<string>("ReferenceNo")
-                        .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
-
-                    b.Property<int>("SupplierId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BusinessId", "Date");
-
-                    b.ToTable("SupplierPayments");
-                });
-
             modelBuilder.Entity("gas_station.Models.Rate", b =>
                 {
                     b.Property<int>("Id")
@@ -1288,6 +1319,9 @@ namespace gas_station.Migrations
                     b.Property<int>("BusinessId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("ConfirmWhenDue")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
@@ -1323,6 +1357,9 @@ namespace gas_station.Migrations
                     b.Property<DateTime?>("NextRunDate")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<DateTime?>("PendingConfirmationRunDate")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<int>("PostingUserId")
                         .HasColumnType("int");
 
@@ -1342,15 +1379,9 @@ namespace gas_station.Migrations
 
                     b.HasIndex("CreditAccountId");
 
-                    b.HasIndex("CustomerFuelGivenId");
-
                     b.HasIndex("DebitAccountId");
 
-                    b.HasIndex("PostingUserId");
-
                     b.HasIndex("StationId");
-
-                    b.HasIndex("SupplierId");
 
                     b.HasIndex("BusinessId", "NextRunDate");
 
@@ -1498,6 +1529,53 @@ namespace gas_station.Migrations
                     b.ToTable("Suppliers");
                 });
 
+            modelBuilder.Entity("gas_station.Models.SupplierPayment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<double>("Amount")
+                        .HasColumnType("double");
+
+                    b.Property<int>("BusinessId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("ReferenceNo")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<int>("SupplierId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupplierId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("BusinessId", "Date");
+
+                    b.ToTable("SupplierPayments");
+                });
+
             modelBuilder.Entity("gas_station.Models.TransferInventory", b =>
                 {
                     b.Property<int>("Id")
@@ -1527,6 +1605,9 @@ namespace gas_station.Migrations
                     b.Property<string>("Note")
                         .HasMaxLength(2000)
                         .HasColumnType("varchar(2000)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
 
                     b.Property<int>("ToStationId")
                         .HasColumnType("int");
@@ -1594,11 +1675,11 @@ namespace gas_station.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BusinessId");
-
                     b.HasIndex("ChangedByUserId");
 
                     b.HasIndex("ToStationId");
+
+                    b.HasIndex("BusinessId", "ChangedAt");
 
                     b.HasIndex("TransferInventoryId", "ChangedAt");
 
@@ -1674,12 +1755,49 @@ namespace gas_station.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("gas_station.Models.Business", b =>
+            modelBuilder.Entity("gas_station.Models.AppNotification", b =>
                 {
-                    b.HasOne("gas_station.Models.Account", null)
+                    b.HasOne("gas_station.Models.Business", null)
                         .WithMany()
-                        .HasForeignKey("RetainedEarningsAccountId")
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("gas_station.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("ConfirmedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("gas_station.Models.Station", null)
+                        .WithMany()
+                        .HasForeignKey("StationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("gas_station.Models.TransferInventory", null)
+                        .WithMany()
+                        .HasForeignKey("TransferInventoryId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("gas_station.Models.AppNotificationRead", b =>
+                {
+                    b.HasOne("gas_station.Models.AppNotification", "AppNotification")
+                        .WithMany()
+                        .HasForeignKey("AppNotificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("gas_station.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AppNotification");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("gas_station.Models.BusinessFuelInventory", b =>
@@ -1784,14 +1902,6 @@ namespace gas_station.Migrations
                     b.Navigation("InventorySale");
                 });
 
-            modelBuilder.Entity("gas_station.Models.JournalEntry", b =>
-                {
-                    b.HasOne("gas_station.Models.RecurringJournalEntry", null)
-                        .WithMany()
-                        .HasForeignKey("RecurringJournalEntryId")
-                        .OnDelete(DeleteBehavior.SetNull);
-                });
-
             modelBuilder.Entity("gas_station.Models.JournalEntryLine", b =>
                 {
                     b.HasOne("gas_station.Models.Account", "Account")
@@ -1872,31 +1982,15 @@ namespace gas_station.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("gas_station.Models.CustomerFuelGiven", null)
-                        .WithMany()
-                        .HasForeignKey("CustomerFuelGivenId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("gas_station.Models.Account", "DebitAccount")
                         .WithMany()
                         .HasForeignKey("DebitAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("gas_station.Models.User", null)
-                        .WithMany()
-                        .HasForeignKey("PostingUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("gas_station.Models.Station", "Station")
                         .WithMany()
                         .HasForeignKey("StationId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("gas_station.Models.Supplier", null)
-                        .WithMany()
-                        .HasForeignKey("SupplierId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("CreditAccount");
@@ -1915,6 +2009,27 @@ namespace gas_station.Migrations
                         .IsRequired();
 
                     b.Navigation("Menu");
+                });
+
+            modelBuilder.Entity("gas_station.Models.SupplierPayment", b =>
+                {
+                    b.HasOne("gas_station.Models.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("gas_station.Models.Supplier", null)
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("gas_station.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("gas_station.Models.TransferInventory", b =>

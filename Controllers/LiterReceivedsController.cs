@@ -18,6 +18,7 @@ public class LiterReceivedsController(
     ILiterReceivedRepository repository,
     IStationRepository stationRepository,
     IDippingRepository dippingRepository,
+    IBusinessFuelInventoryLedgerRepository busFuelLedger,
     GasStationDBContext dbContext) : ControllerBase
 {
     private const string SuperAdminRole = "SuperAdmin";
@@ -151,6 +152,36 @@ public class LiterReceivedsController(
     /// <summary>Applies dipping change for a new or updated liter row.</summary>
     private Task<IActionResult?> ApplyDippingForLiterAsync(LiterReceived row) =>
         TryAdjustDippingAsync(row.StationId, row.FuelTypeId, DippingDeltaFor(row.Type, row.ReceivedLiter));
+
+    private async Task<IActionResult?> TryConfirmPoolTransferReceiptAsync(
+        string normalizedFlow,
+        int targetBusinessId,
+        LiterReceivedWriteRequestViewModel dto,
+        int userId,
+        int? resolvedToStationId,
+        double liters)
+    {
+        if (!dto.ConfirmBusinessPoolTransferReceived)
+            return null;
+
+        if (!IsOutFlow(normalizedFlow))
+            return BadRequest("Business pool transfer confirmation applies only to Out (transfer) records.");
+
+        if (dto.ConfirmTransferInventoryId is null or <= 0)
+            return BadRequest("Select a pending pool transfer when confirming receipt.");
+
+        if (resolvedToStationId is null or <= 0)
+            return BadRequest("Destination station is required to confirm a pool transfer.");
+
+        var msg = await busFuelLedger.TryMarkTransferReceivedAsync(
+            dto.ConfirmTransferInventoryId.Value,
+            targetBusinessId,
+            dto.FuelTypeId,
+            resolvedToStationId.Value,
+            liters,
+            userId);
+        return msg is null ? null : BadRequest(msg);
+    }
 
     private async Task<(IActionResult? Error, int StationId, int? ToStationId)> ResolveStationsForCreateOrUpdateAsync(
         LiterReceivedWriteRequestViewModel dto,
@@ -358,6 +389,19 @@ public class LiterReceivedsController(
                 return dipErr;
             }
 
+            var poolErr = await TryConfirmPoolTransferReceiptAsync(
+                normalizedFlow,
+                targetBusinessId,
+                dto,
+                userId,
+                toStationId,
+                liters);
+            if (poolErr is not null)
+            {
+                await tx.RollbackAsync();
+                return poolErr;
+            }
+
             await tx.CommitAsync();
             return Ok(entity);
         }
@@ -447,6 +491,19 @@ public class LiterReceivedsController(
             {
                 await tx.RollbackAsync();
                 return applyErr;
+            }
+
+            var poolErr2 = await TryConfirmPoolTransferReceiptAsync(
+                normalizedFlow,
+                targetBusinessId,
+                dto,
+                userId,
+                toStationId,
+                liters);
+            if (poolErr2 is not null)
+            {
+                await tx.RollbackAsync();
+                return poolErr2;
             }
 
             await tx.CommitAsync();

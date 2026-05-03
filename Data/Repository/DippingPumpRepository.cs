@@ -10,6 +10,9 @@ public class DippingPumpRepository(GasStationDBContext context) : IDippingPumpRe
     private readonly GasStationDBContext _context = context;
     private DbSet<DippingPump> Set => _context.Set<DippingPump>();
 
+    public Task<DippingPump?> GetByIdAsync(int id) =>
+        Set.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+
     public async Task<int?> GetDippingIdByNozzleIdAsync(int nozzleId)
     {
         var dipId = await Set.AsNoTracking()
@@ -19,9 +22,6 @@ public class DippingPumpRepository(GasStationDBContext context) : IDippingPumpRe
             .FirstOrDefaultAsync();
         return dipId <= 0 ? null : dipId;
     }
-
-    public Task<DippingPump?> GetByIdAsync(int id) =>
-        Set.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
     public Task<DippingPump?> GetFirstByNozzleIdAsync(int nozzleId) =>
         Set.Where(x => !x.IsDeleted && x.NozzleId == nozzleId).OrderBy(x => x.Id).FirstOrDefaultAsync();
@@ -48,10 +48,11 @@ public class DippingPumpRepository(GasStationDBContext context) : IDippingPumpRe
 
     public async Task SoftDeleteByIdAsync(int id)
     {
-        var e = await Set.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
-        if (e is null) return;
-        e.IsDeleted = true;
-        e.UpdatedAt = DateTime.UtcNow;
+        var row = await Set.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+        if (row is null) return;
+        var now = DateTime.UtcNow;
+        row.IsDeleted = true;
+        row.UpdatedAt = now;
         await _context.SaveChangesAsync();
     }
 

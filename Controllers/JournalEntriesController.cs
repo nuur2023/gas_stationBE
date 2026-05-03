@@ -126,8 +126,6 @@ public class JournalEntriesController(
 
             var isAr = AccountingSubledgerRules.IsAccountsReceivable(acc);
             var isAp = AccountingSubledgerRules.IsAccountsPayable(acc);
-            var isExpense = string.Equals(acc.ChartsOfAccounts?.Type, "Expense", StringComparison.OrdinalIgnoreCase)
-                            || string.Equals(acc.ChartsOfAccounts?.Type, "COGS", StringComparison.OrdinalIgnoreCase);
 
             if (isAr)
             {
@@ -154,9 +152,12 @@ public class JournalEntriesController(
             else
             {
                 if (custId.HasValue)
-                    return BadRequest("Customer is only allowed on Accounts Receivable accounts.");
-                if (suppId.HasValue && !isExpense)
-                    return BadRequest("Supplier is only allowed on Accounts Payable or Expense/COGS accounts.");
+                {
+                    var cfg = await dbContext.CustomerFuelGivens.AsNoTracking()
+                        .FirstOrDefaultAsync(x => x.Id == custId.Value && !x.IsDeleted && x.BusinessId == bid);
+                    if (cfg is null)
+                        return BadRequest("Invalid customer for this business.");
+                }
                 if (suppId.HasValue)
                 {
                     var sup = await dbContext.Suppliers.AsNoTracking()
