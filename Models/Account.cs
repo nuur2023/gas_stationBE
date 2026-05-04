@@ -13,6 +13,11 @@ public class Account : BaseModel
     [ValidateNever]
     public ChartsOfAccounts ChartsOfAccounts { get; set; } = null!;
 
+    /// <summary>
+    /// When <see cref="BusinessId"/> is set and this is null, the row is a business-only staging / temporary
+    /// top-level account (not a structural child of the shared chart). It can still receive journal lines;
+    /// UI rollups should not treat it as part of normal parent totals.
+    /// </summary>
     public int? ParentAccountId { get; set; }
     [ValidateNever]
     public Account? ParentAccount { get; set; }

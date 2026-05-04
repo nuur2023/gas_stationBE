@@ -31,6 +31,10 @@ public class InventoriesController(
     private static bool IsSuperAdmin(ClaimsPrincipal user) =>
         user.IsInRole(SuperAdminRole);
 
+    /// <summary>Treat null/whitespace liter fields as zero so clients can omit or send empty strings.</summary>
+    private static string NormalizeInventoryLiterString(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "0" : value.Trim();
+
     private bool TryGetJwtBusiness(out int businessId)
     {
         businessId = 0;
@@ -1041,22 +1045,22 @@ public class InventoriesController(
             return BadRequest("Inventory belongs to a different business.");
         }
 
-        if (!double.TryParse(dto.OpeningLiters.Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var openL))
+        if (!double.TryParse(NormalizeInventoryLiterString(dto.OpeningLiters), NumberStyles.Any, CultureInfo.InvariantCulture, out var openL))
         {
             return BadRequest("Invalid opening liters.");
         }
 
-        if (!double.TryParse(dto.ClosingLiters.Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var closeL))
+        if (!double.TryParse(NormalizeInventoryLiterString(dto.ClosingLiters), NumberStyles.Any, CultureInfo.InvariantCulture, out var closeL))
         {
             return BadRequest("Invalid closing liters.");
         }
 
-        if (!double.TryParse(dto.SspLiters.Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var sspLiters))
+        if (!double.TryParse(NormalizeInventoryLiterString(dto.SspLiters), NumberStyles.Any, CultureInfo.InvariantCulture, out var sspLiters))
         {
             return BadRequest("Invalid SSP liters.");
         }
 
-        if (!double.TryParse(dto.UsdLiters.Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var usdLiters))
+        if (!double.TryParse(NormalizeInventoryLiterString(dto.UsdLiters), NumberStyles.Any, CultureInfo.InvariantCulture, out var usdLiters))
         {
             return BadRequest("Invalid USD liters.");
         }

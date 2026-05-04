@@ -32,6 +32,19 @@ public class JournalEntryWriteRequestViewModel
     public List<JournalEntryLineWriteRequestViewModel> Lines { get; set; } = new();
 }
 
+/// <summary>Updates header text only; lines and amounts are unchanged.</summary>
+public class JournalEntryDescriptionPatchViewModel
+{
+    public string Description { get; set; } = "";
+}
+
+/// <summary>Mark an open period closed after books are closed manually (no journal is posted).</summary>
+public class MarkAccountingPeriodClosedViewModel
+{
+    /// <summary>Optional manual close journal id for audit (must belong to the same business).</summary>
+    public int? CloseJournalEntryId { get; set; }
+}
+
 public class CustomerPaymentWriteRequestViewModel
 {
     public int CustomerFuelGivenId { get; set; }

@@ -205,6 +205,21 @@ public class JournalEntriesController(
         }
     }
 
+    [HttpPatch("{id:int}/description")]
+    public async Task<IActionResult> PatchDescription(int id, [FromBody] JournalEntryDescriptionPatchViewModel dto)
+    {
+        var row = await repository.GetByIdAsync(id);
+        if (row is null) return NotFound();
+        if (!IsSuperAdmin(User) && (!TryGetJwtBusiness(out var bid) || row.BusinessId != bid)) return Forbid();
+        if (!TryGetUserId(out _, out var uerr)) return uerr!;
+
+        var desc = dto.Description?.Trim() ?? string.Empty;
+        if (desc.Length > 4000) return BadRequest("Description is too long (max 4000 characters).");
+
+        var updated = await repository.UpdateDescriptionAsync(id, desc);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {

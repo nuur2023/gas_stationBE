@@ -454,11 +454,12 @@ public static class SeedData
             [
                 new SubMenu { Name = "Trial balance", Route = "/financial-reports/trial-balance", CreatedAt = now, UpdatedAt = now },
                 new SubMenu { Name = "General ledger", Route = "/financial-reports/general-ledger", CreatedAt = now, UpdatedAt = now },
-                new SubMenu { Name = "Profit and loss", Route = "/financial-reports/profit-and-loss", CreatedAt = now, UpdatedAt = now },
+                new SubMenu { Name = "Income Statement", Route = "/financial-reports/profit-and-loss", CreatedAt = now, UpdatedAt = now },
                 new SubMenu { Name = "Balance sheet", Route = "/financial-reports/balance-sheet", CreatedAt = now, UpdatedAt = now },
+                new SubMenu { Name = "Capital Statement", Route = "/financial-reports/capital-statement", CreatedAt = now, UpdatedAt = now },
                 new SubMenu { Name = "Customer balances", Route = "/financial-reports/customer-balances", CreatedAt = now, UpdatedAt = now },
                 new SubMenu { Name = "Supplier balances", Route = "/financial-reports/supplier-balances", CreatedAt = now, UpdatedAt = now },
-                new SubMenu { Name = "Daily cash flow report", Route = "/financial-reports/daily-cash-flow", CreatedAt = now, UpdatedAt = now },
+                new SubMenu { Name = "Cash flow statement", Route = "/financial-reports/daily-cash-flow", CreatedAt = now, UpdatedAt = now },
             ],
         };
 

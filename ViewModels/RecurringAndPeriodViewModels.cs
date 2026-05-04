@@ -40,3 +40,11 @@ public class AccountingPeriodWriteViewModel
     public DateTimeOffset PeriodStart { get; set; }
     public DateTimeOffset PeriodEnd { get; set; }
 }
+
+/// <summary>Update an existing period (business is unchanged).</summary>
+public class AccountingPeriodUpdateViewModel
+{
+    public string Name { get; set; } = "";
+    public DateTimeOffset PeriodStart { get; set; }
+    public DateTimeOffset PeriodEnd { get; set; }
+}

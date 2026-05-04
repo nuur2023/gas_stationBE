@@ -19,7 +19,10 @@ internal sealed record ReportJournalLineRow(
     string AccountType,
     double Debit,
     double Credit,
-    string? Remark);
+    string? Remark,
+    /// <summary>When set with no parent, account is business staging (temporary) — excluded from balance sheet math.</summary>
+    int? AccountBusinessId,
+    int? AccountParentAccountId);
 
 [ApiController]
 [Route("api/[controller]")]
@@ -38,10 +41,8 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
 
     /// <summary>
     /// Station scope for financial reports: only when the client passes <c>stationId</c> &gt; 0.
-    /// We intentionally do <b>not</b> fall back to JWT <c>station_id</c> here. Otherwise trial balance
-    /// (and COA tree) would exclude business-wide journal entries with <see cref="JournalEntry.StationId"/> null,
-    /// while the journal list often omits <c>filterStationId</c> when no workspace station is selected — balances
-    /// would show zero even though entries exist.
+    /// <see cref="FilterLines"/> then includes that station&apos;s entries <b>plus</b> business-wide journals
+    /// (<see cref="JournalEntry.StationId"/> null), e.g. period close. We do <b>not</b> fall back to JWT <c>station_id</c>.
     /// </summary>
     private static int? ResolveStationFilterForReports(int? stationId) =>
         stationId is > 0 ? stationId.Value : null;
@@ -83,7 +84,8 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
 
         if (from.HasValue) q = q.Where(x => x.e.Date >= from.Value);
         if (to.HasValue) q = q.Where(x => x.e.Date <= to.Value);
-        if (stationId.HasValue) q = q.Where(x => x.e.StationId == stationId.Value);
+        // Business-wide journals (e.g. period close) have null StationId — still include them when scoping by station.
+        if (stationId.HasValue) q = q.Where(x => x.e.StationId == null || x.e.StationId == stationId.Value);
         return q.Select(x => new ReportJournalLineRow(
             x.e.Id,
             x.e.Date,
@@ -95,8 +97,24 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
             x.c.Type,
             x.l.Debit,
             x.l.Credit,
-            x.l.Remark));
+            x.l.Remark,
+            x.a.BusinessId,
+            x.a.ParentAccountId));
     }
+
+    /// <summary>
+    /// Balance sheet and P&amp;L must include <see cref="JournalEntryKind.Closing"/> lines so a closed period shows
+    /// retained earnings and zeroed income statement accounts. Only explicit <c>unadjusted</c> omits adjusting and closing
+    /// (strictly pre-close view). Values <c>adjusted</c> and <c>postclosing</c> both map to including closing entries here.
+    /// </summary>
+    private static string StatementReportTrialBalanceMode(string? requested) =>
+        string.Equals(requested?.Trim(), "unadjusted", StringComparison.OrdinalIgnoreCase)
+            ? "unadjusted"
+            : "postclosing";
+
+    /// <summary>Business-scoped top-level staging account (not linked under chart parent). Omit from balance sheet totals/lines.</summary>
+    private static bool IsTemporaryBusinessStagingAccount(int? accountBusinessId, int? accountParentAccountId) =>
+        accountBusinessId is > 0 && (accountParentAccountId is null or 0);
 
     [HttpGet("trial-balance")]
     public IActionResult TrialBalance(
@@ -235,7 +253,7 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
     {
         if (!ResolveBusiness(businessId, out var bid, out var err)) return err!;
         var stationFilter = ResolveStationFilterForReports(stationId);
-        var raw = FilterLines(bid, from, to, stationFilter, trialBalanceMode).AsEnumerable().ToList();
+        var raw = FilterLines(bid, from, to, stationFilter, StatementReportTrialBalanceMode(trialBalanceMode)).AsEnumerable().ToList();
 
         var byAccount = raw
             .GroupBy(x => new { x.AccountId, x.AccountCode, x.AccountName, x.AccountType })
@@ -295,15 +313,18 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
     {
         if (!ResolveBusiness(businessId, out var bid, out var err)) return err!;
         var stationFilter = ResolveStationFilterForReports(stationId);
-        var allLines = FilterLines(bid, null, to, stationFilter, trialBalanceMode).AsEnumerable().ToList();
-        var assets = allLines.Where(x => string.Equals(x.AccountType, "Asset", StringComparison.OrdinalIgnoreCase))
+        var allLines = FilterLines(bid, null, to, stationFilter, StatementReportTrialBalanceMode(trialBalanceMode)).AsEnumerable().ToList();
+        var bsLines = allLines
+            .Where(x => !IsTemporaryBusinessStagingAccount(x.AccountBusinessId, x.AccountParentAccountId))
+            .ToList();
+        var assets = bsLines.Where(x => string.Equals(x.AccountType, "Asset", StringComparison.OrdinalIgnoreCase))
             .Sum(x => x.Debit - x.Credit);
-        var liabilities = allLines.Where(x => string.Equals(x.AccountType, "Liability", StringComparison.OrdinalIgnoreCase))
+        var liabilities = bsLines.Where(x => string.Equals(x.AccountType, "Liability", StringComparison.OrdinalIgnoreCase))
             .Sum(x => x.Credit - x.Debit);
-        var equity = allLines.Where(x => string.Equals(x.AccountType, "Equity", StringComparison.OrdinalIgnoreCase))
+        var equity = bsLines.Where(x => string.Equals(x.AccountType, "Equity", StringComparison.OrdinalIgnoreCase))
             .Sum(x => x.Credit - x.Debit);
 
-        var bsByAccount = allLines
+        var bsByAccount = bsLines
             .Where(x => IsBalanceSheetAccountType(x.AccountType))
             .GroupBy(x => new { x.AccountId, x.AccountCode, x.AccountName, x.AccountType })
             .Select(g =>
@@ -342,6 +363,111 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
             assetAccounts,
             liabilityAccounts,
             equityAccounts,
+        });
+    }
+
+    /// <summary>
+    /// Statement of changes in equity: each equity account with beginning balance (through day before <paramref name="from"/>),
+    /// period change, and ending balance (through <paramref name="to"/>). Uses the same journal scope as the balance sheet.
+    /// Also returns net income for the period (Income Statement) for reference.
+    /// </summary>
+    [HttpGet("capital-statement")]
+    public IActionResult CapitalStatement(
+        [FromQuery] int businessId,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] int? stationId,
+        [FromQuery] string? trialBalanceMode = null)
+    {
+        if (!ResolveBusiness(businessId, out var bid, out var err)) return err!;
+        if (!from.HasValue || !to.HasValue)
+            return BadRequest("from and to are required.");
+        var fromDate = from.Value.Date;
+        var toDate = to.Value.Date;
+        if (fromDate > toDate)
+            return BadRequest("from must be on or before to.");
+
+        var mode = StatementReportTrialBalanceMode(trialBalanceMode);
+        var stationFilter = ResolveStationFilterForReports(stationId);
+
+        static bool IsEquityStaging(ReportJournalLineRow x) =>
+            string.Equals(x.AccountType, "Equity", StringComparison.OrdinalIgnoreCase)
+            && !IsTemporaryBusinessStagingAccount(x.AccountBusinessId, x.AccountParentAccountId);
+
+        var beginningTo = fromDate.AddDays(-1);
+        var begLines = beginningTo >= new DateTime(1900, 1, 1)
+            ? FilterLines(bid, null, beginningTo, stationFilter, mode).AsEnumerable().Where(IsEquityStaging).ToList()
+            : new List<ReportJournalLineRow>();
+
+        var endLines = FilterLines(bid, null, toDate, stationFilter, mode).AsEnumerable().Where(IsEquityStaging).ToList();
+
+        static Dictionary<int, (string Code, string Name, double Balance)> EquityBalances(IEnumerable<ReportJournalLineRow> lines)
+        {
+            return lines
+                .GroupBy(x => new { x.AccountId, x.AccountCode, x.AccountName })
+                .ToDictionary(
+                    g => g.Key.AccountId,
+                    g => (g.Key.AccountCode, g.Key.AccountName, g.Sum(x => x.Credit - x.Debit)));
+        }
+
+        var begByAccount = EquityBalances(begLines);
+        var endByAccount = EquityBalances(endLines);
+        var accountIds = begByAccount.Keys.Union(endByAccount.Keys)
+            .OrderBy(id =>
+            {
+                endByAccount.TryGetValue(id, out var em);
+                begByAccount.TryGetValue(id, out var bm);
+                return (em.Code ?? bm.Code) ?? "";
+            })
+            .ToList();
+
+        var equityRows = new List<object>();
+        double totalBeginning = 0, totalChange = 0, totalEnding = 0;
+        foreach (var id in accountIds)
+        {
+            begByAccount.TryGetValue(id, out var begMeta);
+            endByAccount.TryGetValue(id, out var endMeta);
+            var beginning = begMeta.Balance;
+            var ending = endMeta.Balance;
+            var change = ending - beginning;
+            var code = endMeta.Code ?? begMeta.Code ?? "";
+            var name = endMeta.Name ?? begMeta.Name ?? "";
+            equityRows.Add(new
+            {
+                accountId = id,
+                code,
+                name,
+                beginning,
+                change,
+                ending,
+            });
+            totalBeginning += beginning;
+            totalChange += change;
+            totalEnding += ending;
+        }
+
+        var plRaw = FilterLines(bid, fromDate, toDate, stationFilter, mode).AsEnumerable().ToList();
+        var byAccount = plRaw
+            .GroupBy(x => new { x.AccountId, x.AccountCode, x.AccountName, x.AccountType })
+            .Select(g => new
+            {
+                g.Key.AccountType,
+                Amount = g.Sum(x => PlSignedAmountForLine(g.Key.AccountType, x.Debit, x.Credit)),
+            })
+            .Where(x => Math.Abs(x.Amount) > 0.000001)
+            .ToList();
+        var incomeTotal = byAccount.Where(x => IsIncomeType(x.AccountType)).Sum(x => x.Amount);
+        var cogsTotal = byAccount.Where(x => IsCogsType(x.AccountType)).Sum(x => x.Amount);
+        var expenseTotal = byAccount.Where(x => IsExpenseType(x.AccountType)).Sum(x => x.Amount);
+        var netIncome = incomeTotal - cogsTotal - expenseTotal;
+
+        return Ok(new
+        {
+            equityRows,
+            totalBeginning,
+            totalChange,
+            totalEnding,
+            netIncome,
         });
     }
 

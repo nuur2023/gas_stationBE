@@ -91,5 +91,15 @@ public class JournalEntryRepository(GasStationDBContext context) : IJournalEntry
 
         return new PagedResult<JournalEntry>(items, total, page, pageSize);
     }
+
+    public async Task<JournalEntry?> UpdateDescriptionAsync(int id, string description)
+    {
+        var row = await Set.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+        if (row is null) return null;
+        row.Description = description;
+        row.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        return await GetByIdAsync(id);
+    }
 }
 

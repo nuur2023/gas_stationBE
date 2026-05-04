@@ -238,7 +238,6 @@ builder.Services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IBusinessFuelInventoryLedgerRepository, BusinessFuelInventoryLedgerRepository>();
 builder.Services.AddScoped<INotificationsRepository, NotificationsRepository>();
-builder.Services.AddScoped<PeriodCloseService>();
 builder.Services.AddHostedService<RecurringJournalHostedService>();
 
 // -------------------- FORWARDED HEADERS --------------------

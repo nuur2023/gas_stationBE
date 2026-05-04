@@ -16,6 +16,16 @@ public interface IBusinessFuelInventoryLedgerRepository
     Task<TransferInventoryDto?> UpdateTransferAsync(int id, int businessId, int toStationId, double liters, DateTime date, string? note, int userId, string reason);
     Task<bool> SoftDeleteTransferAsync(int id, int businessId, int userId, string reason);
     Task<string?> TryMarkTransferReceivedAsync(int transferId, int businessId, int fuelTypeId, int toStationId, double liters, int userId);
+
+    /// <summary>
+    /// For an In liter row: if a pending pool transfer matches the same business, fuel, receiving station, and liters, mark it received; otherwise no-op.
+    /// </summary>
+    Task<string?> TryAutoCompleteMatchingPendingTransferForLiterInAsync(
+        int businessId,
+        int fuelTypeId,
+        int receivingStationId,
+        double liters,
+        int userId);
     Task<List<TransferInventoryAuditDto>> GetTransferAuditAsync(int transferId, int businessId);
     Task<PagedResult<TransferInventoryAuditListRowDto>> GetTransferAuditsPagedForBusinessAsync(int businessId, int page, int pageSize, string? q);
 }

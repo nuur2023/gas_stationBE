@@ -402,6 +402,21 @@ public class LiterReceivedsController(
                 return poolErr;
             }
 
+            if (normalizedFlow == "In" && liters > 0)
+            {
+                var autoXferErr = await busFuelLedger.TryAutoCompleteMatchingPendingTransferForLiterInAsync(
+                    targetBusinessId,
+                    dto.FuelTypeId,
+                    stationId,
+                    liters,
+                    userId);
+                if (autoXferErr is not null)
+                {
+                    await tx.RollbackAsync();
+                    return BadRequest(autoXferErr);
+                }
+            }
+
             await tx.CommitAsync();
             return Ok(entity);
         }
@@ -504,6 +519,21 @@ public class LiterReceivedsController(
             {
                 await tx.RollbackAsync();
                 return poolErr2;
+            }
+
+            if (normalizedFlow == "In" && liters > 0)
+            {
+                var autoXferErr2 = await busFuelLedger.TryAutoCompleteMatchingPendingTransferForLiterInAsync(
+                    targetBusinessId,
+                    dto.FuelTypeId,
+                    stationId,
+                    liters,
+                    userId);
+                if (autoXferErr2 is not null)
+                {
+                    await tx.RollbackAsync();
+                    return BadRequest(autoXferErr2);
+                }
             }
 
             await tx.CommitAsync();

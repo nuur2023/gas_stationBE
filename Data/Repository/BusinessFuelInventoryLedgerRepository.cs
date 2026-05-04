@@ -539,6 +539,32 @@ public class BusinessFuelInventoryLedgerRepository(GasStationDBContext context) 
         return null;
     }
 
+    public async Task<string?> TryAutoCompleteMatchingPendingTransferForLiterInAsync(
+        int businessId,
+        int fuelTypeId,
+        int receivingStationId,
+        double liters,
+        int userId)
+    {
+        if (liters <= 0) return null;
+
+        var transferId = await (
+            from t in _context.TransferInventories.AsNoTracking()
+            join b in _context.BusinessFuelInventories.AsNoTracking() on t.BusinessFuelInventoryId equals b.Id
+            where !t.IsDeleted && !b.IsDeleted
+                  && b.BusinessId == businessId
+                  && b.FuelTypeId == fuelTypeId
+                  && t.ToStationId == receivingStationId
+                  && t.Status == TransferInventoryStatus.Pending
+                  && Math.Abs(t.Liters - liters) < 0.000001
+            orderby t.Date, t.Id
+            select t.Id).FirstOrDefaultAsync();
+
+        if (transferId == 0) return null;
+
+        return await TryMarkTransferReceivedAsync(transferId, businessId, fuelTypeId, receivingStationId, liters, userId);
+    }
+
     public async Task<PagedResult<TransferInventoryAuditListRowDto>> GetTransferAuditsPagedForBusinessAsync(
         int businessId,
         int page,
