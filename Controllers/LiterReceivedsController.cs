@@ -124,7 +124,11 @@ public class LiterReceivedsController(
         return await ValidateStationBelongsToBusinessAsync(targetBusinessId, fromStationId.Value);
     }
 
-    private async Task<IActionResult?> TryAdjustDippingAsync(int stationId, int fuelTypeId, double delta)
+    private async Task<IActionResult?> TryAdjustDippingAsync(
+        int stationId,
+        int fuelTypeId,
+        double delta,
+        bool clampNegativeToZero = false)
     {
         if (delta == 0) return null;
 
@@ -137,7 +141,12 @@ public class LiterReceivedsController(
         var next = dipping.AmountLiter + delta;
         if (next < 0)
         {
-            return BadRequest("Dipping balance cannot go negative for this operation.");
+            if (!clampNegativeToZero)
+            {
+                return BadRequest("Dipping balance cannot go negative for this operation.");
+            }
+
+            next = 0;
         }
 
         dipping.AmountLiter = next;
@@ -148,6 +157,13 @@ public class LiterReceivedsController(
     /// <summary>Reverses the dipping effect of a saved liter row (for update/delete).</summary>
     private Task<IActionResult?> RevertDippingForLiterAsync(LiterReceived row) =>
         TryAdjustDippingAsync(row.StationId, row.FuelTypeId, -DippingDeltaFor(row.Type, row.ReceivedLiter));
+
+    private Task<IActionResult?> RevertDippingForLiterAsync(LiterReceived row, bool clampNegativeToZero) =>
+        TryAdjustDippingAsync(
+            row.StationId,
+            row.FuelTypeId,
+            -DippingDeltaFor(row.Type, row.ReceivedLiter),
+            clampNegativeToZero);
 
     /// <summary>Applies dipping change for a new or updated liter row.</summary>
     private Task<IActionResult?> ApplyDippingForLiterAsync(LiterReceived row) =>
@@ -547,7 +563,7 @@ public class LiterReceivedsController(
     }
 
     [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> Delete(int id, [FromQuery] bool clampDippingToZero = false)
     {
         var existing = await repository.GetByIdAsync(id);
         if (existing is null)
@@ -571,7 +587,7 @@ public class LiterReceivedsController(
         await using var tx = await dbContext.Database.BeginTransactionAsync();
         try
         {
-            var revertErr = await RevertDippingForLiterAsync(existing);
+            var revertErr = await RevertDippingForLiterAsync(existing, clampDippingToZero);
             if (revertErr is not null)
             {
                 await tx.RollbackAsync();
