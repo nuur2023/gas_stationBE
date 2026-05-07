@@ -61,6 +61,48 @@ public record DailyFuelGivenRowDto(
     double UsdAmount,
     int TransactionCount);
 
+public record DailyStationAmountRowDto(
+    double Amount,
+    string Description,
+    string Date);
+
+public record DailyStationExchangeRowDto(
+    double AmountSsp,
+    double Rate,
+    double Usd,
+    string Date);
+
+public record DailyStationCashTakenRowDto(
+    double AmountSsp,
+    double AmountUsd,
+    string Date);
+
+public record DailyStationFuelRowDto(
+    string Type,
+    double LitersSold,
+    double Ssp,
+    double Usd,
+    double InDipping,
+    string Date);
+
+public record DailyStationFuelPriceDto(
+    double PetrolSsp,
+    double DieselSsp,
+    double PetrolUsd,
+    double DieselUsd);
+
+public record DailyStationReportDto(
+    string StationName,
+    string From,
+    string To,
+    DailyStationFuelPriceDto FuelPrices,
+    IReadOnlyList<DailyStationAmountRowDto> ExpenseFromStation,
+    IReadOnlyList<DailyStationFuelRowDto> FuelReport,
+    IReadOnlyList<DailyStationExchangeRowDto> ExchangeFromStation,
+    IReadOnlyList<DailyStationCashTakenRowDto> CashTakenFromStation,
+    IReadOnlyList<DailyStationAmountRowDto> ExpenseFromOffice,
+    IReadOnlyList<DailyStationExchangeRowDto> ExchangeFromOffice);
+
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
@@ -140,6 +182,12 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
 
     private static string ClassifyCashOutKind(Expense e)
     {
+        if (string.Equals(e.Type, "cashOrUsdTaken", StringComparison.OrdinalIgnoreCase))
+            return "Cash or USD Taken";
+        if (string.Equals(e.Type, "Exchange", StringComparison.OrdinalIgnoreCase))
+            return "Exchange";
+        if (string.Equals(e.Type, "Expense", StringComparison.OrdinalIgnoreCase))
+            return "Expense";
         var d = e.Description ?? string.Empty;
         if (Regex.IsMatch(d, @"cash\s*taken", RegexOptions.IgnoreCase))
             return "Cash taken";
@@ -154,7 +202,8 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
         int bid,
         int? stationFilter,
         DateTime? from,
-        DateTime? to)
+        DateTime? to,
+        string? expenseType = null)
     {
         var q = db.Expenses.AsNoTracking().Where(x => !x.IsDeleted && x.BusinessId == bid);
         if (from.HasValue)
@@ -167,6 +216,8 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
 
         if (stationFilter is > 0)
             q = q.Where(x => x.StationId == stationFilter.Value);
+        if (!string.IsNullOrWhiteSpace(expenseType))
+            q = q.Where(x => x.Type == expenseType);
 
         var items = await q
             .OrderBy(x => x.Date)
@@ -240,7 +291,8 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
         [FromQuery] int businessId,
         [FromQuery] DateTime? from = null,
         [FromQuery] DateTime? to = null,
-        [FromQuery] int? stationId = null)
+        [FromQuery] int? stationId = null,
+        [FromQuery] string? expenseType = null)
     {
         if (!ResolveBusiness(businessId, out var bid, out var err))
             return err!;
@@ -249,7 +301,7 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
         if (stationErr != null)
             return stationErr;
 
-        return Ok(await BuildCashOutDailyReportAsync(bid, stationFilter, from, to));
+        return Ok(await BuildCashOutDailyReportAsync(bid, stationFilter, from, to, expenseType));
     }
 
     /// <summary>
@@ -337,9 +389,9 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
             }
         }
 
-        var periodCashOut = await BuildCashOutDailyReportAsync(bid, stationFilter, fromDay, toDay);
+        var periodCashOut = await BuildCashOutDailyReportAsync(bid, stationFilter, fromDay, toDay, null);
         var previousTo = fromDay.AddDays(-1);
-        var previousCashOut = await BuildCashOutDailyReportAsync(bid, stationFilter, null, previousTo);
+        var previousCashOut = await BuildCashOutDailyReportAsync(bid, stationFilter, null, previousTo, null);
 
         var prevOut = SumCashOutLineSplits(previousCashOut.Lines);
         var periodOut = SumCashOutLineSplits(periodCashOut.Lines);
@@ -443,5 +495,202 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
             .ToList();
 
         return Ok(rows);
+    }
+
+    /// <summary>
+    /// Daily station report block sections for PDF/UI.
+    /// Defaults to current date when from/to are omitted.
+    /// If stationId is omitted, first station in business is used.
+    /// </summary>
+    [HttpGet("daily-station-report")]
+    public async Task<IActionResult> FetchDailyStationReport(
+        [FromQuery] int businessId,
+        [FromQuery] int? stationId = null,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null)
+    {
+        if (!ResolveBusiness(businessId, out var bid, out var err))
+            return err!;
+
+        var fromDay = (from ?? DateTime.UtcNow).Date;
+        var toDay = (to ?? DateTime.UtcNow).Date;
+        if (fromDay > toDay)
+            return BadRequest("from must be on or before to.");
+
+        var (resolvedStationFilter, stationErr) = await ResolveReportStationAsync(bid, stationId);
+        if (stationErr != null)
+            return stationErr;
+
+        var effectiveStationId = resolvedStationFilter;
+        if (!effectiveStationId.HasValue || effectiveStationId.Value <= 0)
+        {
+            effectiveStationId = await db.Stations.AsNoTracking()
+                .Where(s => !s.IsDeleted && s.BusinessId == bid)
+                .OrderBy(s => s.Id)
+                .Select(s => (int?)s.Id)
+                .FirstOrDefaultAsync();
+        }
+        if (!effectiveStationId.HasValue || effectiveStationId.Value <= 0)
+            return BadRequest("No station found for this business.");
+
+        var selectedStation = await db.Stations.AsNoTracking()
+            .FirstOrDefaultAsync(s => !s.IsDeleted && s.BusinessId == bid && s.Id == effectiveStationId.Value);
+        if (selectedStation is null)
+            return BadRequest("Invalid station for this business.");
+
+        var fromInclusive = fromDay;
+        var toExclusive = toDay.AddDays(1);
+        var stationIdVal = effectiveStationId.Value;
+
+        var fuelPriceRows = await (
+            from fp in db.FuelPrices.AsNoTracking()
+            join ft in db.FuelTypes.AsNoTracking() on fp.FuelTypeId equals ft.Id
+            join c in db.Currencies.AsNoTracking() on fp.CurrencyId equals c.Id
+            where !fp.IsDeleted && !ft.IsDeleted && !c.IsDeleted
+                  && fp.BusinessId == bid && fp.StationId == stationIdVal
+            orderby fp.Id descending
+            select new { ft.FuelName, CurrencyCode = c.Code, fp.Price }
+        ).ToListAsync();
+
+        static bool IsPetrol(string name) =>
+            !string.IsNullOrWhiteSpace(name) &&
+            (name.Contains("petrol", StringComparison.OrdinalIgnoreCase)
+             || name.Contains("gasoline", StringComparison.OrdinalIgnoreCase)
+             || name.Contains("pms", StringComparison.OrdinalIgnoreCase)
+             || name.Contains("mogas", StringComparison.OrdinalIgnoreCase));
+        static bool IsDiesel(string name) =>
+            !string.IsNullOrWhiteSpace(name) &&
+            (name.Contains("diesel", StringComparison.OrdinalIgnoreCase)
+             || name.Contains("gasoil", StringComparison.OrdinalIgnoreCase)
+             || name.Contains("ago", StringComparison.OrdinalIgnoreCase));
+
+        double petrolSsp = 0, dieselSsp = 0, petrolUsd = 0, dieselUsd = 0;
+        foreach (var row in fuelPriceRows)
+        {
+            var cur = (row.CurrencyCode ?? string.Empty).Trim().ToUpperInvariant();
+            if (IsPetrol(row.FuelName))
+            {
+                if (cur == "USD" && petrolUsd == 0) petrolUsd = row.Price;
+                if (cur != "USD" && petrolSsp == 0) petrolSsp = row.Price;
+            }
+            else if (IsDiesel(row.FuelName))
+            {
+                if (cur == "USD" && dieselUsd == 0) dieselUsd = row.Price;
+                if (cur != "USD" && dieselSsp == 0) dieselSsp = row.Price;
+            }
+            if (petrolSsp > 0 && dieselSsp > 0 && petrolUsd > 0 && dieselUsd > 0) break;
+        }
+
+        var stationExpenses = await db.Expenses.AsNoTracking()
+            .Where(e => !e.IsDeleted && e.BusinessId == bid
+                        && e.StationId == stationIdVal
+                        && e.Date >= fromInclusive && e.Date < toExclusive)
+            .OrderBy(e => e.Date)
+            .ThenBy(e => e.Id)
+            .ToListAsync();
+
+        var officeExpenses = await db.Expenses.AsNoTracking()
+            .Where(e => !e.IsDeleted && e.BusinessId == bid
+                        && e.SideAction == "Management"
+                        && e.Date >= fromInclusive && e.Date < toExclusive)
+            .OrderBy(e => e.Date)
+            .ThenBy(e => e.Id)
+            .ToListAsync();
+
+        var expenseFromStation = stationExpenses
+            .Where(e => string.Equals(e.Type, "Expense", StringComparison.OrdinalIgnoreCase))
+            .Select(e => new DailyStationAmountRowDto(
+                e.LocalAmount,
+                e.Description ?? string.Empty,
+                e.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
+            .ToList();
+
+        var exchangeFromStation = stationExpenses
+            .Where(e => string.Equals(e.Type, "Exchange", StringComparison.OrdinalIgnoreCase))
+            .Select(e => new DailyStationExchangeRowDto(
+                e.LocalAmount,
+                e.Rate,
+                e.AmountUsd,
+                e.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
+            .ToList();
+
+        var cashTakenFromStation = stationExpenses
+            .Where(e => string.Equals(e.Type, "cashOrUsdTaken", StringComparison.OrdinalIgnoreCase))
+            .Select(e => new DailyStationCashTakenRowDto(
+                e.LocalAmount,
+                e.AmountUsd,
+                e.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
+            .ToList();
+
+        var expenseFromOffice = officeExpenses
+            .Where(e => string.Equals(e.Type, "Expense", StringComparison.OrdinalIgnoreCase))
+            .Select(e => new DailyStationAmountRowDto(
+                e.LocalAmount,
+                e.Description ?? string.Empty,
+                e.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
+            .ToList();
+
+        var exchangeFromOffice = officeExpenses
+            .Where(e => string.Equals(e.Type, "Exchange", StringComparison.OrdinalIgnoreCase))
+            .Select(e => new DailyStationExchangeRowDto(
+                e.LocalAmount,
+                e.Rate,
+                e.AmountUsd,
+                e.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
+            .ToList();
+
+        var fuelSalesRaw = await (
+            from it in db.InventoryItems.AsNoTracking()
+            join sale in db.InventorySales.AsNoTracking() on it.InventorySaleId equals sale.Id
+            join nz in db.Nozzles.AsNoTracking() on it.NozzleId equals nz.Id
+            join dp in db.DippingPumps.AsNoTracking() on nz.Id equals dp.NozzleId
+            join d in db.Dippings.AsNoTracking() on dp.DippingId equals d.Id
+            join ft in db.FuelTypes.AsNoTracking() on d.FuelTypeId equals ft.Id
+            where !it.IsDeleted && !sale.IsDeleted && !nz.IsDeleted && !dp.IsDeleted && !d.IsDeleted && !ft.IsDeleted
+                  && sale.BusinessId == bid
+                  && sale.StationId == stationIdVal
+                  && it.Date >= fromInclusive && it.Date < toExclusive
+            select new
+            {
+                Date = it.Date.Date,
+                FuelName = ft.FuelName,
+                Liters = it.SspLiters + it.UsdLiters,
+                it.SspAmount,
+                it.UsdAmount,
+                d.AmountLiter
+            }
+        ).ToListAsync();
+
+        var fuelGroups = fuelSalesRaw
+            .GroupBy(x => new
+            {
+                x.Date,
+                Kind = IsDiesel(x.FuelName) ? "Diesel" : IsPetrol(x.FuelName) ? "Petrol" : x.FuelName
+            })
+            .OrderBy(g => g.Key.Date)
+            .ThenBy(g => g.Key.Kind)
+            .Select(g => new DailyStationFuelRowDto(
+                g.Key.Kind,
+                g.Sum(x => x.Liters),
+                g.Sum(x => x.SspAmount),
+                g.Sum(x => x.UsdAmount),
+                g.Sum(x => x.AmountLiter),
+                g.Key.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
+            .ToList();
+
+        var dto = new DailyStationReportDto(
+            selectedStation.Name,
+            fromDay.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            toDay.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            new DailyStationFuelPriceDto(petrolSsp, dieselSsp, petrolUsd, dieselUsd),
+            expenseFromStation,
+            fuelGroups,
+            exchangeFromStation,
+            cashTakenFromStation,
+            expenseFromOffice,
+            exchangeFromOffice
+        );
+
+        return Ok(dto);
     }
 }

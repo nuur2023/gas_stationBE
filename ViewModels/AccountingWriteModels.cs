@@ -32,10 +32,11 @@ public class JournalEntryWriteRequestViewModel
     public List<JournalEntryLineWriteRequestViewModel> Lines { get; set; } = new();
 }
 
-/// <summary>Updates header text only; lines and amounts are unchanged.</summary>
+/// <summary>Updates journal header fields only; lines and amounts are unchanged.</summary>
 public class JournalEntryDescriptionPatchViewModel
 {
     public string Description { get; set; } = "";
+    public DateTimeOffset? Date { get; set; }
 }
 
 /// <summary>Mark an open period closed after books are closed manually (no journal is posted).</summary>

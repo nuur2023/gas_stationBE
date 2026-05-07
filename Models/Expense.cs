@@ -2,6 +2,10 @@ namespace gas_station.Models;
 
 public class Expense : BaseModel
 {
+    /// <summary>Expense | cashOrUsdTaken | Exchange</summary>
+    public string Type { get; set; } = "Expense";
+    /// <summary>Operation | Management</summary>
+    public string SideAction { get; set; } = "Operation";
     public DateTime Date { get; set; } = DateTime.UtcNow;
     public string Description { get; set; } = string.Empty;
     public string CurrencyCode { get; set; } = "USD";

@@ -15,6 +15,31 @@ namespace gas_station.Controllers;
 [Authorize]
 public class ExpensesController(IExpenseRepository repository, IStationRepository stationRepository) : ControllerBase
 {
+    private static string NormalizeExpenseType(string? raw)
+    {
+        var t = (raw ?? string.Empty).Trim();
+        if (string.Equals(t, "exchange", StringComparison.OrdinalIgnoreCase)) return "Exchange";
+        if (string.Equals(t, "cashOrUsdTaken", StringComparison.OrdinalIgnoreCase)) return "cashOrUsdTaken";
+        return "Expense";
+    }
+    private static string NormalizeSideAction(string? raw)
+    {
+        var t = (raw ?? string.Empty).Trim();
+        if (string.Equals(t, "management", StringComparison.OrdinalIgnoreCase)) return "Management";
+        return "Operation";
+    }
+    private string ResolveSideAction(string? requested)
+    {
+        var fallback = User.IsInRole("SuperAdmin") || User.IsInRole("Admin") ? "Management" : "Operation";
+        if (string.IsNullOrWhiteSpace(requested))
+            return fallback;
+
+        var normalized = NormalizeSideAction(requested);
+        if (fallback == "Operation" && normalized == "Management")
+            return "Operation";
+        return normalized;
+    }
+
     private static string NormalizeCurrencyCode(string? code)
     {
         var normalized = (code ?? string.Empty).Trim().ToUpperInvariant();
@@ -108,11 +133,15 @@ public class ExpensesController(IExpenseRepository repository, IStationRepositor
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
         [FromQuery] string? q = null,
-        [FromQuery] int? filterStationId = null)
+        [FromQuery] int? filterStationId = null,
+        [FromQuery] string? type = null,
+        [FromQuery] string? sideAction = null)
     {
+        var normalizedType = string.IsNullOrWhiteSpace(type) ? null : NormalizeExpenseType(type);
+        var normalizedSideAction = ResolveSideAction(sideAction);
         if (IsSuperAdmin(User))
         {
-            return Ok(await repository.GetPagedAsync(page, pageSize, q, null, filterStationId));
+            return Ok(await repository.GetPagedAsync(page, pageSize, q, null, filterStationId, normalizedType, normalizedSideAction));
         }
 
         if (!TryGetJwtBusiness(out var bid))
@@ -121,7 +150,7 @@ public class ExpensesController(IExpenseRepository repository, IStationRepositor
         }
 
         var stationFilter = ListStationFilter.ForNonSuperAdmin(User, filterStationId);
-        return Ok(await repository.GetPagedAsync(page, pageSize, q, bid, stationFilter));
+        return Ok(await repository.GetPagedAsync(page, pageSize, q, bid, stationFilter, normalizedType, normalizedSideAction));
     }
 
     [HttpGet("{id:int}")]
@@ -180,6 +209,8 @@ public class ExpensesController(IExpenseRepository repository, IStationRepositor
 
         var entity = new Expense
         {
+            Type = NormalizeExpenseType(dto.Type),
+            SideAction = ResolveSideAction(dto.SideAction),
             Date = dto.Date?.UtcDateTime ?? DateTime.UtcNow,
             Description = dto.Description,
             CurrencyCode = NormalizeCurrencyCode(dto.CurrencyCode),
@@ -242,6 +273,8 @@ public class ExpensesController(IExpenseRepository repository, IStationRepositor
         }
 
         existing.Description = dto.Description;
+        existing.Type = NormalizeExpenseType(dto.Type);
+        existing.SideAction = ResolveSideAction(dto.SideAction);
         existing.CurrencyCode = NormalizeCurrencyCode(dto.CurrencyCode);
         existing.LocalAmount = local;
         existing.Rate = rate;

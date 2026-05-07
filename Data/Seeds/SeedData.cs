@@ -73,7 +73,7 @@ public static class SeedData
             types.Exists(x => string.Equals(x, t, StringComparison.OrdinalIgnoreCase));
 
         var now = DateTime.UtcNow;
-        var defaultTypes = new[] { "Asset", "Liability", "Equity", "Income", "Expense", "COGS" };
+        var defaultTypes = new[] { "Asset", "Liability", "Equity", "Income", "Expense", "COGS", "Temporary Account" };
         var anyAdded = false;
 
         foreach (var t in defaultTypes)
@@ -474,6 +474,9 @@ public static class SeedData
                 new SubMenu { Name = "Liter received", Route = "/reports/liter-received", CreatedAt = now, UpdatedAt = now },
                 new SubMenu { Name = "Daily cash sales report", Route = "/reports/daily-cash-sales", CreatedAt = now, UpdatedAt = now },
                 new SubMenu { Name = "Cash out daily (expenses)", Route = "/reports/cash-out-daily", CreatedAt = now, UpdatedAt = now },
+                new SubMenu { Name = "Expense reports", Route = "/reports/expenses", CreatedAt = now, UpdatedAt = now },
+                new SubMenu { Name = "Exchange reports", Route = "/reports/exchange", CreatedAt = now, UpdatedAt = now },
+                new SubMenu { Name = "Cash or USD Taken reports", Route = "/reports/cash-usd-taken", CreatedAt = now, UpdatedAt = now },
                 new SubMenu { Name = "Daily given fuel", Route = "/reports/daily-fuel-given", CreatedAt = now, UpdatedAt = now },
                 new SubMenu { Name = "General daily report", Route = "/reports/general-daily", CreatedAt = now, UpdatedAt = now },
                 new SubMenu { Name = "Inventory daily", Route = "/reports/inventory-daily", CreatedAt = now, UpdatedAt = now },
@@ -503,6 +506,10 @@ public static class SeedData
         [
             ("Dashboard", "/", "Dashboard"),
             ("Expenses", "/expenses", "Expenses"),
+            ("Cash or USD Taken", "/operations/cash-usd-taken", "Cash or USD Taken"),
+            ("Exchange", "/operations/exchange", "Exchange"),
+            ("Expenses", "/management/expenses", "Expenses"),
+            ("Exchange", "/management/exchange", "Exchange"),
             ("Inventory", "/inventory", "Inventory"),
             ("Rates", "/rates", "Rates"),
             ("Generator usage", "/generator-usage", "Generator usage"),
@@ -525,6 +532,9 @@ public static class SeedData
             ("Business fuel pool", "/fuel-inventory", "Business fuel pool"),
             ("Transfer fuels", "/transfers", "Transfer fuels"),
             // ("Reports", "/reports/outstanding-customers", "Outstanding customers"),
+            ("Expense reports", "/reports/expenses", "Expense reports"),
+            ("Exchange reports", "/reports/exchange", "Exchange reports"),
+            ("Cash or USD Taken reports", "/reports/cash-usd-taken", "Cash or USD Taken reports"),
         ];
 
         foreach (var (menuName, route, subName) in sidebar)

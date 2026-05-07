@@ -215,8 +215,16 @@ public class JournalEntriesController(
 
         var desc = dto.Description?.Trim() ?? string.Empty;
         if (desc.Length > 4000) return BadRequest("Description is too long (max 4000 characters).");
+        DateTime? nextDateUtc = null;
+        if (dto.Date.HasValue)
+        {
+            var resolvedDate = dto.Date.Value.UtcDateTime;
+            if (await AccountingPeriodGuard.IsPostingBlockedAsync(dbContext, row.BusinessId, resolvedDate, row.EntryKind))
+                return BadRequest("The journal date falls in a closed accounting period.");
+            nextDateUtc = resolvedDate;
+        }
 
-        var updated = await repository.UpdateDescriptionAsync(id, desc);
+        var updated = await repository.UpdateHeaderAsync(id, desc, nextDateUtc);
         return updated is null ? NotFound() : Ok(updated);
     }
 

@@ -21,6 +21,10 @@ public class BusinessUserWriteRequestViewModel
 public class ExpenseWriteRequestViewModel
 
 {
+    /// <summary>Expense | cashOrUsdTaken | Exchange</summary>
+    public string Type { get; set; } = "Expense";
+    /// <summary>Operation | Management</summary>
+    public string SideAction { get; set; } = "Operation";
 
     public string Description { get; set; } = "";
 

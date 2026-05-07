@@ -3,6 +3,8 @@ namespace gas_station.ViewModels;
 public class ExpenseViewModel
 {
     public int Id { get; set; }
+    public string Type { get; set; } = "Expense";
+    public string SideAction { get; set; } = "Operation";
     public DateTime Date { get; set; }
     public string Description { get; set; } = "";
     public string CurrencyCode { get; set; } = "USD";

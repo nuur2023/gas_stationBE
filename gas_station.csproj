@@ -8,6 +8,12 @@
     <AssemblyName>gas_station</AssemblyName>
   </PropertyGroup>
 
+  <!-- Debug: no project-name.exe apphost — dotnet run uses the shared host. Avoids MSB3026/3027 when an old
+       gas_station.exe is still running and locks bin\Debug\net8.0\gas_station.exe during rebuild. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.12" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.12" />

@@ -47,7 +47,7 @@ public class ExpenseRepository(GasStationDBContext context) : IExpenseRepository
 
     public Task<Expense?> GetByIdAsync(int id) => Set.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
-    public async Task<PagedResult<Expense>> GetPagedAsync(int page, int pageSize, string? search, int? businessId, int? stationId = null)
+    public async Task<PagedResult<Expense>> GetPagedAsync(int page, int pageSize, string? search, int? businessId, int? stationId = null, string? type = null, string? sideAction = null)
     {
         var q = Set.AsQueryable().Where(x => !x.IsDeleted);
         if (businessId.HasValue)
@@ -58,6 +58,23 @@ public class ExpenseRepository(GasStationDBContext context) : IExpenseRepository
         if (stationId is > 0)
         {
             q = q.Where(x => x.StationId == stationId.Value);
+        }
+        if (!string.IsNullOrWhiteSpace(type))
+        {
+            var t = type.Trim();
+            q = q.Where(x => x.Type == t);
+        }
+        if (!string.IsNullOrWhiteSpace(sideAction))
+        {
+            var s = sideAction.Trim();
+            if (string.Equals(s, "Operation", StringComparison.OrdinalIgnoreCase))
+            {
+                q = q.Where(x => x.SideAction == "Operation" || x.SideAction == "");
+            }
+            else
+            {
+                q = q.Where(x => x.SideAction == s);
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(search))
