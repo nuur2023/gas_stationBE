@@ -639,34 +639,76 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
                 e.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
             .ToList();
 
+        // Resolve fuel name per nozzle once (first non-deleted dipping link wins). Avoids the
+        // DippingPumps×Dippings cross-product that would otherwise duplicate sales rows when a
+        // nozzle has multiple pump links, and lets us drop AmountLiter from the sales aggregation.
+        var stationNozzleIds = await db.Nozzles.AsNoTracking()
+            .Where(n => !n.IsDeleted && n.BusinessId == bid && n.StationId == stationIdVal)
+            .Select(n => n.Id)
+            .ToListAsync();
+        var stationNozzleSet = stationNozzleIds.ToHashSet();
+
+        var nozzleFuelLinks = await (
+            from dp in db.DippingPumps.AsNoTracking()
+            join d in db.Dippings.AsNoTracking() on dp.DippingId equals d.Id
+            join ft in db.FuelTypes.AsNoTracking() on d.FuelTypeId equals ft.Id
+            where !dp.IsDeleted && !d.IsDeleted && !ft.IsDeleted
+                  && stationNozzleSet.Contains(dp.NozzleId)
+            select new { dp.NozzleId, FuelName = ft.FuelName ?? string.Empty }
+        ).ToListAsync();
+
+        var fuelNameByNozzle = new Dictionary<int, string>();
+        foreach (var pl in nozzleFuelLinks)
+        {
+            if (!fuelNameByNozzle.ContainsKey(pl.NozzleId))
+                fuelNameByNozzle[pl.NozzleId] = pl.FuelName;
+        }
+
+        // Current tank balance per fuel kind (Petrol/Diesel/other). One value per kind, regardless
+        // of how many sales rows happened on the day.
+        var dippingRows = await (
+            from d in db.Dippings.AsNoTracking()
+            join ft in db.FuelTypes.AsNoTracking() on d.FuelTypeId equals ft.Id
+            where !d.IsDeleted && !ft.IsDeleted
+                  && d.BusinessId == bid && d.StationId == stationIdVal
+            select new { ft.FuelName, d.AmountLiter }
+        ).ToListAsync();
+
+        var dippingByKind = dippingRows
+            .GroupBy(x => IsDiesel(x.FuelName) ? "Diesel" : IsPetrol(x.FuelName) ? "Petrol" : (x.FuelName ?? string.Empty))
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.AmountLiter));
+
         var fuelSalesRaw = await (
             from it in db.InventoryItems.AsNoTracking()
             join sale in db.InventorySales.AsNoTracking() on it.InventorySaleId equals sale.Id
             join nz in db.Nozzles.AsNoTracking() on it.NozzleId equals nz.Id
-            join dp in db.DippingPumps.AsNoTracking() on nz.Id equals dp.NozzleId
-            join d in db.Dippings.AsNoTracking() on dp.DippingId equals d.Id
-            join ft in db.FuelTypes.AsNoTracking() on d.FuelTypeId equals ft.Id
-            where !it.IsDeleted && !sale.IsDeleted && !nz.IsDeleted && !dp.IsDeleted && !d.IsDeleted && !ft.IsDeleted
+            where !it.IsDeleted && !sale.IsDeleted && !nz.IsDeleted
                   && sale.BusinessId == bid
                   && sale.StationId == stationIdVal
                   && it.Date >= fromInclusive && it.Date < toExclusive
             select new
             {
                 Date = it.Date.Date,
-                FuelName = ft.FuelName,
+                it.NozzleId,
                 Liters = it.SspLiters + it.UsdLiters,
                 it.SspAmount,
                 it.UsdAmount,
-                d.AmountLiter
             }
         ).ToListAsync();
 
         var fuelGroups = fuelSalesRaw
-            .GroupBy(x => new
+            .Select(x => new
             {
                 x.Date,
-                Kind = IsDiesel(x.FuelName) ? "Diesel" : IsPetrol(x.FuelName) ? "Petrol" : x.FuelName
+                Kind = fuelNameByNozzle.TryGetValue(x.NozzleId, out var fn)
+                    ? (IsDiesel(fn) ? "Diesel" : IsPetrol(fn) ? "Petrol" : (fn ?? string.Empty))
+                    : string.Empty,
+                x.Liters,
+                x.SspAmount,
+                x.UsdAmount,
             })
+            .Where(x => !string.IsNullOrEmpty(x.Kind))
+            .GroupBy(x => new { x.Date, x.Kind })
             .OrderBy(g => g.Key.Date)
             .ThenBy(g => g.Key.Kind)
             .Select(g => new DailyStationFuelRowDto(
@@ -674,7 +716,7 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
                 g.Sum(x => x.Liters),
                 g.Sum(x => x.SspAmount),
                 g.Sum(x => x.UsdAmount),
-                g.Sum(x => x.AmountLiter),
+                dippingByKind.TryGetValue(g.Key.Kind, out var dipBalance) ? dipBalance : 0,
                 g.Key.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
             .ToList();
 

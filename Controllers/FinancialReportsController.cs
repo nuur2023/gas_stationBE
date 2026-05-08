@@ -24,6 +24,15 @@ internal sealed record ReportJournalLineRow(
     int? AccountBusinessId,
     int? AccountParentAccountId);
 
+internal sealed record CashFlowLineItem(
+    string Description,
+    string Code,
+    string Name,
+    double Amount);
+
+/// <summary>Direct-method cash flow: one row per counterparty account hit by net cash in an entry.</summary>
+internal sealed record DirectCashFlowDetailRow(string LineKey, string AccountCode, string AccountName, double Amount);
+
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
@@ -354,6 +363,271 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
         List<object> LiabilityAccounts,
         List<object> EquityAccounts);
 
+    private static bool IsIncomeBucket(string? accountType, string? accountCode, string? accountName, double amount) =>
+        IsIncomeType(accountType)
+        || IsIncomeClassCode(accountCode)
+        || IsIncomeName(accountName)
+        || (!string.IsNullOrWhiteSpace(accountName)
+            && (accountName.Contains("Sales", StringComparison.OrdinalIgnoreCase)
+                || accountName.Contains("Revenue", StringComparison.OrdinalIgnoreCase)
+                || (accountName.Contains("Fuel", StringComparison.OrdinalIgnoreCase)
+                    && !accountName.Contains("Expense", StringComparison.OrdinalIgnoreCase))))
+        || (!IsBalanceSheetAccountType(accountType) && amount > 0);
+
+    private static bool IsCogsBucket(string? accountType, string? accountCode, string? accountName) =>
+        IsCogsType(accountType) || IsCogsClassCode(accountCode) || IsCogsName(accountName);
+
+    private static bool IsExpenseBucket(string? accountType, string? accountCode, string? accountName, double amount) =>
+        IsExpenseType(accountType)
+        || IsExpenseClassCode(accountCode)
+        || IsExpenseName(accountName)
+        || (!IsBalanceSheetAccountType(accountType) && !IsIncomeBucket(accountType, accountCode, accountName, amount) && amount >= 0);
+
+    private static string CashFlowOperatingReceivedDescription(string accountName)
+    {
+        var n = accountName?.Trim() ?? "";
+        if (n.Contains("sale", StringComparison.OrdinalIgnoreCase)
+            || n.Contains("revenue", StringComparison.OrdinalIgnoreCase)
+            || n.Contains("income", StringComparison.OrdinalIgnoreCase))
+            return "Cash received from customers";
+        return $"Cash received: {n}";
+    }
+
+    private static string CashFlowOperatingPaidDescription(string accountName)
+    {
+        var n = accountName?.Trim() ?? "";
+        if (n.Contains("prepaid rent", StringComparison.OrdinalIgnoreCase)) return "Cash paid for prepaid rent";
+        if (n.Contains("rent", StringComparison.OrdinalIgnoreCase)) return "Cash paid for rent";
+        if (n.Contains("salary", StringComparison.OrdinalIgnoreCase) || n.Contains("wage", StringComparison.OrdinalIgnoreCase)) return "Cash paid to employees";
+        if (n.Contains("utility", StringComparison.OrdinalIgnoreCase)
+            || n.Contains("stationery", StringComparison.OrdinalIgnoreCase)
+            || n.Contains("supply", StringComparison.OrdinalIgnoreCase))
+            return "Cash paid for expenses (utilities, stationery, supplies)";
+        if (n.Contains("supplier", StringComparison.OrdinalIgnoreCase) || n.Contains("purchase", StringComparison.OrdinalIgnoreCase)) return "Cash paid to suppliers";
+        return $"Cash paid: {n}";
+    }
+
+    private static bool IsLikelyCashOrBankAsset(string? accountName)
+    {
+        if (string.IsNullOrWhiteSpace(accountName)) return false;
+        var n = accountName.Trim();
+        return n.Contains("cash", StringComparison.OrdinalIgnoreCase)
+            || n.Contains("bank", StringComparison.OrdinalIgnoreCase)
+            || n.Contains("petty", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string CashFlowInvestingDescription(string accountName, double amount)
+    {
+        var n = accountName?.Trim() ?? "";
+        if (n.Contains("inventory", StringComparison.OrdinalIgnoreCase) || n.Contains("laptop", StringComparison.OrdinalIgnoreCase))
+            return amount >= 0 ? "Purchase of inventory (laptops)" : "Sale of inventory";
+        if (n.Contains("equipment", StringComparison.OrdinalIgnoreCase))
+            return amount >= 0 ? "Purchase of office equipment" : "Sale of office equipment";
+        if (n.Contains("office supply", StringComparison.OrdinalIgnoreCase) || n.Contains("suppl", StringComparison.OrdinalIgnoreCase))
+            return amount >= 0 ? "Purchase of office supplies" : "Sale of office supplies";
+        return amount >= 0
+            ? $"Purchase of {n}"
+            : $"Sale of {n}";
+    }
+
+    private static string CashFlowFinancingDescription(string? accountType, string accountName, double amount)
+    {
+        var n = accountName?.Trim() ?? "";
+        var isEquity = string.Equals(accountType, "Equity", StringComparison.OrdinalIgnoreCase);
+        if (isEquity)
+            return amount >= 0 ? "Owner investment" : "Owner withdrawal";
+        if (n.Contains("loan", StringComparison.OrdinalIgnoreCase) || n.Contains("payable", StringComparison.OrdinalIgnoreCase))
+            return amount >= 0 ? "Loans received" : "Loan repayments";
+        return amount >= 0 ? $"Financing inflow: {n}" : $"Financing outflow: {n}";
+    }
+
+    private static bool IsPotentialInternalCashTransferLine(ReportJournalLineRow x) =>
+        string.Equals(x.AccountType, "Asset", StringComparison.OrdinalIgnoreCase)
+        && IsLikelyCashOrBankAsset(x.AccountName);
+
+    private static List<CashFlowLineItem> ConsolidateCashFlowLines(IEnumerable<CashFlowLineItem> rows)
+    {
+        return rows
+            .GroupBy(x => x.Description)
+            .Select(g => new CashFlowLineItem(
+                g.Key,
+                g.First().Code,
+                g.First().Name,
+                g.Sum(x => x.Amount)))
+            .Where(x => Math.Abs(x.Amount) > 0.000001)
+            .OrderBy(x => x.Description)
+            .ToList();
+    }
+
+    private static bool IsCashOrBankAccount(ReportJournalLineRow x) =>
+        string.Equals(x.AccountType, "Asset", StringComparison.OrdinalIgnoreCase)
+        && IsLikelyCashOrBankAsset(x.AccountName);
+
+    private static bool IsInternalCashTransferEntry(IReadOnlyList<ReportJournalLineRow> lines)
+    {
+        if (lines.Count < 2) return false;
+        return lines.All(IsCashOrBankAccount);
+    }
+
+    private static bool NameLooksLikeAccountsReceivable(string? accountType, string? accountName)
+    {
+        if (!string.Equals(accountType, "Asset", StringComparison.OrdinalIgnoreCase)) return false;
+        var n = accountName ?? "";
+        return n.Contains("receivable", StringComparison.OrdinalIgnoreCase)
+            || n.Contains("a/r", StringComparison.OrdinalIgnoreCase)
+            || n.Contains("accounts receivable", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool NameLooksLikeRetainedOrClosingEquity(string? accountName)
+    {
+        var n = accountName ?? "";
+        return n.Contains("retained", StringComparison.OrdinalIgnoreCase)
+            || n.Contains("income summary", StringComparison.OrdinalIgnoreCase)
+            || n.Contains("closing", StringComparison.OrdinalIgnoreCase)
+            || (n.Contains("earnings", StringComparison.OrdinalIgnoreCase) && !n.Contains("owner", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Owner capital / contribution equity (exclude retained earnings and similar).</summary>
+    private static bool NameLooksLikeOwnerContributionEquity(string? accountName)
+    {
+        if (string.IsNullOrWhiteSpace(accountName)) return false;
+        if (NameLooksLikeRetainedOrClosingEquity(accountName)) return false;
+        var n = accountName;
+        return n.Contains("capital", StringComparison.OrdinalIgnoreCase)
+            || n.Contains("contributed", StringComparison.OrdinalIgnoreCase)
+            || n.Contains("owner investment", StringComparison.OrdinalIgnoreCase)
+            || (n.Contains("owner", StringComparison.OrdinalIgnoreCase) && n.Contains("equity", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? ClassifyCashInflowLineKey(ReportJournalLineRow c)
+    {
+        var t = c.AccountType ?? "";
+        var n = c.AccountName ?? "";
+        var code = c.AccountCode?.Trim() ?? "";
+
+        if (string.Equals(t, "Liability", StringComparison.OrdinalIgnoreCase))
+        {
+            if (n.Contains("loan", StringComparison.OrdinalIgnoreCase) || n.Contains("note payable", StringComparison.OrdinalIgnoreCase))
+                return "loansReceived";
+            return "financingOther";
+        }
+
+        if (string.Equals(t, "Equity", StringComparison.OrdinalIgnoreCase))
+        {
+            if (NameLooksLikeRetainedOrClosingEquity(n)) return null;
+            if (NameLooksLikeOwnerContributionEquity(n)) return "ownerInvestment";
+            return "financingOther";
+        }
+
+        if (IsIncomeType(t) || IsIncomeName(n) || code.StartsWith("4", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(t, "Revenue", StringComparison.OrdinalIgnoreCase))
+            return "sales";
+
+        if (NameLooksLikeAccountsReceivable(t, n)) return "sales";
+
+        return "operatingOtherInflow";
+    }
+
+    private static string ClassifyCashOutflowLineKey(ReportJournalLineRow d)
+    {
+        var t = d.AccountType ?? "";
+        var n = d.AccountName ?? "";
+
+        if (string.Equals(t, "Asset", StringComparison.OrdinalIgnoreCase)
+            && n.Contains("prepaid", StringComparison.OrdinalIgnoreCase)
+            && n.Contains("rent", StringComparison.OrdinalIgnoreCase))
+            return "prepaidRent";
+
+        if (string.Equals(t, "Asset", StringComparison.OrdinalIgnoreCase) && n.Contains("prepaid", StringComparison.OrdinalIgnoreCase))
+            return "prepaidRent";
+
+        if (n.Contains("inventory", StringComparison.OrdinalIgnoreCase) || n.Contains("laptop", StringComparison.OrdinalIgnoreCase))
+            return "inventory";
+        if (n.Contains("equipment", StringComparison.OrdinalIgnoreCase)) return "equipment";
+        if (n.Contains("office supply", StringComparison.OrdinalIgnoreCase)
+            || (n.Contains("supply", StringComparison.OrdinalIgnoreCase) && !n.Contains("prepaid", StringComparison.OrdinalIgnoreCase)))
+            return "supplies";
+
+        if (n.Contains("salary", StringComparison.OrdinalIgnoreCase) || n.Contains("wage", StringComparison.OrdinalIgnoreCase))
+            return "salaries";
+
+        if (n.Contains("utility", StringComparison.OrdinalIgnoreCase)
+            || n.Contains("stationery", StringComparison.OrdinalIgnoreCase)
+            || (n.Contains("supply", StringComparison.OrdinalIgnoreCase) && !n.Contains("office supply", StringComparison.OrdinalIgnoreCase)))
+            return "utilitiesSupplies";
+
+        if (IsExpenseType(t) || string.Equals(t, "Expense", StringComparison.OrdinalIgnoreCase) || string.Equals(t, "COGS", StringComparison.OrdinalIgnoreCase) || IsCogsType(t))
+            return "utilitiesSupplies";
+
+        return "operatingOtherOutflow";
+    }
+
+    /// <summary>
+    /// Direct-method: net cash movement per journal entry is allocated to non-cash lines (proportional split),
+    /// so accrual-only adjusting lines (e.g. Dr Rent Exp / Cr Prepaid) have zero cash effect.
+    /// </summary>
+    private static List<DirectCashFlowDetailRow> BuildDirectCashFlowDetailRows(
+        IReadOnlyList<ReportJournalLineRow> periodLines,
+        HashSet<int> internalTransferEntryIds)
+    {
+        var outRows = new List<DirectCashFlowDetailRow>();
+        foreach (var g in periodLines.GroupBy(x => x.EntryId))
+        {
+            if (internalTransferEntryIds.Contains(g.Key)) continue;
+            var lines = g.ToList();
+            if (IsInternalCashTransferEntry(lines)) continue;
+
+            var netCash = lines.Where(IsCashOrBankAccount).Sum(x => x.Debit - x.Credit);
+            if (Math.Abs(netCash) < 0.000001) continue;
+
+            var nonCash = lines.Where(x => !IsCashOrBankAccount(x)).ToList();
+            if (nonCash.Count == 0) continue;
+
+            if (netCash > 0)
+            {
+                var credits = nonCash.Where(x => x.Credit > 0.000001).ToList();
+                if (credits.Count == 0) continue;
+                var weight = credits.Sum(x => x.Credit);
+                foreach (var c in credits)
+                {
+                    var amount = netCash * (c.Credit / weight);
+                    var key = ClassifyCashInflowLineKey(c);
+                    if (key is null) continue;
+                    outRows.Add(new DirectCashFlowDetailRow(
+                        key,
+                        c.AccountCode ?? "",
+                        c.AccountName ?? "",
+                        amount));
+                }
+            }
+            else
+            {
+                var debits = nonCash.Where(x => x.Debit > 0.000001).ToList();
+                if (debits.Count == 0) continue;
+                var weight = debits.Sum(x => x.Debit);
+                foreach (var d in debits)
+                {
+                    var amount = netCash * (d.Debit / weight);
+                    outRows.Add(new DirectCashFlowDetailRow(
+                        ClassifyCashOutflowLineKey(d),
+                        d.AccountCode ?? "",
+                        d.AccountName ?? "",
+                        amount));
+                }
+            }
+        }
+
+        return outRows
+            .Where(x => Math.Abs(x.Amount) > 0.000001)
+            .ToList();
+    }
+
+    private static double SumDirectByKeys(IEnumerable<DirectCashFlowDetailRow> rows, params string[] keys)
+    {
+        var set = new HashSet<string>(keys, StringComparer.OrdinalIgnoreCase);
+        return rows.Where(x => set.Contains(x.LineKey)).Sum(x => x.Amount);
+    }
+
     private ProfitLossReportData BuildProfitLossReportData(
         int businessId,
         DateTime? from,
@@ -380,7 +654,7 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
             .ToList();
 
         var incomeAccounts = byAccount
-            .Where(x => IsIncomeType(x.AccountType) || IsIncomeClassCode(x.AccountCode) || IsIncomeName(x.AccountName))
+            .Where(x => IsIncomeBucket(x.AccountType, x.AccountCode, x.AccountName, x.Amount))
             .OrderBy(x => x.AccountCode)
             .Select(x => new StatementAccountRow(x.AccountCode, x.AccountName, x.Amount))
             .ToList();
@@ -390,35 +664,14 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
             .Select(x => new StatementAccountRow(x.AccountCode, x.AccountName, x.Amount))
             .ToList();
         var expenseAccounts = byAccount
-            .Where(x =>
-                IsExpenseType(x.AccountType) ||
-                IsExpenseClassCode(x.AccountCode) ||
-                IsExpenseName(x.AccountName) ||
-                (!IsBalanceSheetAccountType(x.AccountType)
-                    && !IsIncomeType(x.AccountType)
-                    && !IsIncomeClassCode(x.AccountCode)
-                    && !IsIncomeName(x.AccountName)
-                    && !IsCogsType(x.AccountType)
-                    && !IsCogsClassCode(x.AccountCode)
-                    && !IsCogsName(x.AccountName)))
+            .Where(x => IsExpenseBucket(x.AccountType, x.AccountCode, x.AccountName, x.Amount))
             .OrderBy(x => x.AccountCode)
             .Select(x => new StatementAccountRow(x.AccountCode, x.AccountName, x.Amount))
             .ToList();
 
-        var incomeTotal = byAccount.Where(x => IsIncomeType(x.AccountType) || IsIncomeClassCode(x.AccountCode) || IsIncomeName(x.AccountName)).Sum(x => x.Amount);
+        var incomeTotal = byAccount.Where(x => IsIncomeBucket(x.AccountType, x.AccountCode, x.AccountName, x.Amount)).Sum(x => x.Amount);
         var cogsTotal = byAccount.Where(x => IsCogsType(x.AccountType) || IsCogsClassCode(x.AccountCode) || IsCogsName(x.AccountName)).Sum(x => x.Amount);
-        var expenseTotal = byAccount.Where(x =>
-            IsExpenseType(x.AccountType) ||
-            IsExpenseClassCode(x.AccountCode) ||
-            IsExpenseName(x.AccountName) ||
-            (!IsBalanceSheetAccountType(x.AccountType)
-                && !IsIncomeType(x.AccountType)
-                && !IsIncomeClassCode(x.AccountCode)
-                && !IsIncomeName(x.AccountName)
-                && !IsCogsType(x.AccountType)
-                && !IsCogsClassCode(x.AccountCode)
-                && !IsCogsName(x.AccountName)))
-            .Sum(x => x.Amount);
+        var expenseTotal = byAccount.Where(x => IsExpenseBucket(x.AccountType, x.AccountCode, x.AccountName, x.Amount)).Sum(x => x.Amount);
         var grossProfit = incomeTotal - cogsTotal;
         var netOrdinaryIncome = grossProfit - expenseTotal;
 
@@ -499,6 +752,12 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
     private static double PlSignedAmountForLine(string? accountType, string? accountCode, string? accountName, double debit, double credit)
     {
         if (IsIncomeType(accountType) || IsIncomeClassCode(accountCode) || IsIncomeName(accountName)) return credit - debit;
+        if (!string.IsNullOrWhiteSpace(accountName)
+            && (accountName.Contains("Sales", StringComparison.OrdinalIgnoreCase)
+                || accountName.Contains("Revenue", StringComparison.OrdinalIgnoreCase)
+                || (accountName.Contains("Fuel", StringComparison.OrdinalIgnoreCase)
+                    && !accountName.Contains("Expense", StringComparison.OrdinalIgnoreCase))))
+            return credit - debit;
         if (IsCogsType(accountType) || IsCogsClassCode(accountCode) || IsCogsName(accountName)
             || IsExpenseType(accountType) || IsExpenseClassCode(accountCode) || IsExpenseName(accountName))
             return debit - credit;
@@ -613,9 +872,48 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
     {
         if (!ResolveBusiness(businessId, out var bid, out var err)) return err!;
         var stationFilter = ResolveStationFilterForReports(stationId);
-        var pl = BuildProfitLossReportData(bid, from, to, stationFilter, trialBalanceMode);
+        // Closed-period view must always be historical for P&L / cash-flow (exclude closing lines).
+        var historicalMode = "adjusted";
+        var pl = BuildProfitLossReportData(bid, from, to, stationFilter, historicalMode);
         var bs = BuildBalanceSheetReportData(bid, to, stationFilter, trialBalanceMode);
-        var operatingNetCash = pl.IncomeTotal - pl.ExpenseTotal;
+
+        var periodLinesAll = FilterLines(bid, from, to, stationFilter, historicalMode)
+            .AsEnumerable()
+            .Where(x => !IsTemporaryBusinessStagingAccount(x.AccountBusinessId, x.AccountParentAccountId))
+            .ToList();
+
+        // Exclude pure internal transfers between cash/bank accounts from cash-flow.
+        var internalTransferEntryIds = periodLinesAll
+            .GroupBy(x => x.EntryId)
+            .Where(g =>
+            {
+                var rows = g.ToList();
+                if (rows.Count < 2) return false;
+                return rows.All(IsPotentialInternalCashTransferLine);
+            })
+            .Select(g => g.Key)
+            .ToHashSet();
+
+        var periodLines = periodLinesAll
+            .Where(x => !internalTransferEntryIds.Contains(x.EntryId))
+            .ToList();
+
+        // Direct-method cash flow: only movements on cash/bank accounts; proportional split by counterparty line.
+        var directDetails = BuildDirectCashFlowDetailRows(periodLines, internalTransferEntryIds);
+
+        var operatingTotal = SumDirectByKeys(
+            directDetails,
+            "sales", "prepaidRent", "salaries", "utilitiesSupplies", "operatingOtherInflow", "operatingOtherOutflow");
+        var investingTotal = SumDirectByKeys(directDetails, "inventory", "equipment", "supplies");
+        var financingTotal = SumDirectByKeys(directDetails, "ownerInvestment", "loansReceived", "financingOther");
+        DateTime? openingTo = from.HasValue ? from.Value.Date.AddDays(-1) : null;
+        var openingCashBalance = FilterLines(bid, null, openingTo, stationFilter, historicalMode)
+            .AsEnumerable()
+            .Where(x => !IsTemporaryBusinessStagingAccount(x.AccountBusinessId, x.AccountParentAccountId))
+            .Where(x => string.Equals(x.AccountType, "Asset", StringComparison.OrdinalIgnoreCase) && IsLikelyCashOrBankAsset(x.AccountName))
+            .Sum(x => x.Debit - x.Credit);
+        var netIncreaseInCash = operatingTotal + investingTotal + financingTotal;
+        var endingCashBalance = openingCashBalance + netIncreaseInCash;
 
         return Ok(new
         {
@@ -641,11 +939,22 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
             },
             cashFlowStatement = new
             {
+                method = "direct",
+                openingCashBalance,
+                directDetails = directDetails
+                    .OrderBy(x => x.LineKey)
+                    .ThenBy(x => x.AccountCode)
+                    .Select(x => new { lineKey = x.LineKey, accountCode = x.AccountCode, accountName = x.AccountName, amount = x.Amount })
+                    .ToList(),
                 receivedAccounts = pl.IncomeAccounts,
                 paidAccounts = pl.ExpenseAccounts,
-                cashReceivedFromFuelSales = pl.IncomeTotal,
-                cashPaidForExpense = pl.ExpenseTotal,
-                netCashFromOperating = operatingNetCash,
+                cashReceivedFromFuelSales = SumDirectByKeys(directDetails, "sales", "operatingOtherInflow"),
+                cashPaidForExpense = SumDirectByKeys(directDetails, "prepaidRent", "salaries", "utilitiesSupplies", "operatingOtherOutflow"),
+                netCashFromOperating = operatingTotal,
+                netCashFromInvesting = investingTotal,
+                netCashFromFinancing = financingTotal,
+                netIncreaseInCash,
+                endingCashBalance,
             },
         });
     }
