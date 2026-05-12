@@ -9,7 +9,7 @@ public static class SeedData
 {
     public static async Task InitializeAsync(GasStationDBContext context)
     {
-        await context.Database.EnsureCreatedAsync();
+        // Schema comes from EF migrations (Program.cs); do not call EnsureCreated — it conflicts with Migrate().
 
         if (!await context.Roles.AnyAsync())
         {
@@ -20,30 +20,24 @@ public static class SeedData
                 new Role { Name = "Accountant" },
                 new Role { Name = "Manager" }
             };
-            // if roles are already added in the database, then skip this
-            if (!await context.Roles.AnyAsync())
-            {   
-                await context.Roles.AddRangeAsync(roles);
-                await context.SaveChangesAsync();
-            }
-           
-        
+            await context.Roles.AddRangeAsync(roles);
+            await context.SaveChangesAsync();
+
             var superAdminRoleId = roles.First(r => r.Name == "SuperAdmin").Id;
-            // if already added in the database
             if (!await context.Users.AnyAsync(u => u.Email == "superadmin@gmail.com"))
             {
                 await context.Users.AddRangeAsync(
-                new User
-                {
-                    Name = "Nuur Hassan Mohamed",
-                    Email = "superadmin@gmail.com",
-                    Phone = "612450931",
-                    PasswordHash = PasswordHasher.Hash("SuperAdmin@123"),
-                    RoleId = superAdminRoleId
-                }
-            );
+                    new User
+                    {
+                        Name = "Nuur Hassan Mohamed",
+                        Email = "superadmin@gmail.com",
+                        Phone = "612450931",
+                        PasswordHash = PasswordHasher.Hash("SuperAdmin@123"),
+                        RoleId = superAdminRoleId
+                    });
 
-            await context.SaveChangesAsync();
+                await context.SaveChangesAsync();
+            }
         }
 
         // await EnsureDefaultMenusAsync(context);
@@ -54,7 +48,6 @@ public static class SeedData
         // await EnsureInventoryFuelPriceColumnsAsync(context);
         // await EnsureDippingPumpNavAndAdminPermissionsAsync(context);
         // await EnsurePumpNozzlesSubmenuAsync(context);
-    }
     }
 
     /// <summary>

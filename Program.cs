@@ -284,26 +284,28 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// -------------------- MIGRATE DATABASE --------------------
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<GasStationDBContext>();
-    db.Database.Migrate();
-}
-
-// -------------------- SEED DATA --------------------
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<GasStationDBContext>();
-    await SeedData.InitializeAsync(context);
-}
-
-// -------------------- PORT BINDING (CRITICAL) --------------------
-//------------------Shortcut for port binding------------------
-// var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-// app.Run($"http://0.0.0.0:{port}");
-
-//------------------Dynamic port binding (App Platform / containers)------------------
+// -------------------- PORT + START (before migrate — health checks) --------------------
+// DigitalOcean App Platform probes $PORT while the app is starting. If Migrate/Seed run before
+// the server listens, the probe fails repeatedly and the platform terminates the container.
 var portValue = Environment.GetEnvironmentVariable("PORT");
 var port = int.TryParse(portValue, out var parsedPort) ? parsedPort : 8080;
-app.Run($"http://0.0.0.0:{port}");
+app.Urls.Clear();
+app.Urls.Add($"http://0.0.0.0:{port}");
+
+await app.StartAsync();
+
+try
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<GasStationDBContext>();
+    await db.Database.MigrateAsync();
+    await SeedData.InitializeAsync(db);
+}
+catch (Exception ex)
+{
+    app.Logger.LogCritical(ex, "Database migration or seed failed.");
+    await app.StopAsync();
+    throw;
+}
+
+await app.WaitForShutdownAsync();
