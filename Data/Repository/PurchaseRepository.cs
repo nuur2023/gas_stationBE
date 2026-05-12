@@ -7,7 +7,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace gas_station.Data.Repository;
 
-public class PurchaseRepository(GasStationDBContext context) : IPurchaseRepository
+public class PurchaseRepository(GasStationDBContext context, ISupplierPaymentRepository supplierPayments)
+    : IPurchaseRepository
 {
     private readonly GasStationDBContext _context = context;
     private DbSet<Purchase> Set => _context.Set<Purchase>();
@@ -91,6 +92,7 @@ public class PurchaseRepository(GasStationDBContext context) : IPurchaseReposito
 
             if (supplierPayment is not null)
             {
+                supplierPayment.PurchaseId = purchase.Id;
                 supplierPayment.CreatedAt = DateTime.UtcNow;
                 supplierPayment.UpdatedAt = DateTime.UtcNow;
                 supplierPayment.IsDeleted = false;
@@ -114,14 +116,28 @@ public class PurchaseRepository(GasStationDBContext context) : IPurchaseReposito
         var existing = await Set.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (existing is null) return null;
 
+        var oldSupplierId = existing.SupplierId;
         existing.SupplierId = purchase.SupplierId;
         existing.InvoiceNo = purchase.InvoiceNo;
         existing.BusinessId = purchase.BusinessId;
         existing.PurchaseDate = purchase.PurchaseDate;
-        existing.Status = purchase.Status;
-        existing.AmountPaid = purchase.AmountPaid;
         existing.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
+
+        if (oldSupplierId != purchase.SupplierId)
+        {
+            var ledger = await _context.SupplierPayments
+                .FirstOrDefaultAsync(x => !x.IsDeleted && x.PurchaseId == id && x.Description == "Purchased");
+            if (ledger is not null)
+            {
+                ledger.SupplierId = purchase.SupplierId;
+                ledger.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                await supplierPayments.RecalculateSupplierBalancesAsync(purchase.BusinessId, oldSupplierId);
+                await supplierPayments.RecalculateSupplierBalancesAsync(purchase.BusinessId, purchase.SupplierId);
+            }
+        }
+
         return await GetDetailAsync(id);
     }
 
@@ -136,6 +152,7 @@ public class PurchaseRepository(GasStationDBContext context) : IPurchaseReposito
         item.IsDeleted = false;
         await ItemSet.AddAsync(item);
         await _context.SaveChangesAsync();
+        await supplierPayments.SyncPurchaseChargedTotalAndRecalculateBalancesAsync(purchaseId);
         return await GetDetailAsync(purchaseId);
     }
 
@@ -151,6 +168,7 @@ public class PurchaseRepository(GasStationDBContext context) : IPurchaseReposito
         line.IsDeleted = false;
         line.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
+        await supplierPayments.SyncPurchaseChargedTotalAndRecalculateBalancesAsync(purchaseId);
         return await GetDetailAsync(purchaseId);
     }
 
@@ -163,17 +181,20 @@ public class PurchaseRepository(GasStationDBContext context) : IPurchaseReposito
         line.IsDeleted = true;
         line.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
+        await supplierPayments.SyncPurchaseChargedTotalAndRecalculateBalancesAsync(purchaseId);
         return await GetDetailAsync(purchaseId);
     }
 
     /// <summary>
-    /// Soft-deletes the purchase and every line item (application-level cascade).
-    /// The database FK uses ON DELETE CASCADE for physical deletes if you ever hard-delete a purchase row.
+    /// Soft-deletes the purchase, every line item, and the auto-generated supplier payment row.
     /// </summary>
     public async Task DeleteAsync(int id)
     {
         var p = await Set.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted)
             ?? throw new KeyNotFoundException($"Purchase {id} was not found.");
+
+        var bid = p.BusinessId;
+        var sid = p.SupplierId;
 
         await using var tx = await _context.Database.BeginTransactionAsync();
         try
@@ -188,6 +209,15 @@ public class PurchaseRepository(GasStationDBContext context) : IPurchaseReposito
                 line.UpdatedAt = DateTime.UtcNow;
             }
 
+            var ledgerRows = await _context.SupplierPayments
+                .Where(x => x.PurchaseId == id && !x.IsDeleted)
+                .ToListAsync();
+            foreach (var lr in ledgerRows)
+            {
+                lr.IsDeleted = true;
+                lr.UpdatedAt = DateTime.UtcNow;
+            }
+
             await _context.SaveChangesAsync();
             await tx.CommitAsync();
         }
@@ -196,6 +226,8 @@ public class PurchaseRepository(GasStationDBContext context) : IPurchaseReposito
             await tx.RollbackAsync();
             throw;
         }
+
+        await supplierPayments.RecalculateSupplierBalancesAsync(bid, sid);
     }
 
     private static PurchaseDetailResponse ToDetail(Purchase p, List<PurchaseItem> items) =>
@@ -206,8 +238,6 @@ public class PurchaseRepository(GasStationDBContext context) : IPurchaseReposito
             InvoiceNo = p.InvoiceNo,
             BusinessId = p.BusinessId,
             PurchaseDate = p.PurchaseDate,
-            Status = p.Status,
-            AmountPaid = p.AmountPaid,
             CreatedAt = p.CreatedAt,
             UpdatedAt = p.UpdatedAt,
             Items = items

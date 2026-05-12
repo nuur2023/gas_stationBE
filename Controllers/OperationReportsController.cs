@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using gas_station.Data.Context;
+using gas_station.Data.Repository;
 using gas_station.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,7 +19,7 @@ public record CashOutDailyLineDto(
     double LocalAmount,
     double Rate,
     double AmountUsd,
-    int StationId);
+    int? StationId);
 
 public record CashOutDailyReportDto(
     IReadOnlyList<CashOutDailyLineDto> Lines,
@@ -91,6 +92,16 @@ public record DailyStationFuelPriceDto(
     double PetrolUsd,
     double DieselUsd);
 
+/// <summary>
+/// Per calendar day and recording user: how many distinct employees were paid and total amount.
+/// Scoped to the business only (not filtered by station), like office expense/exchange sections on the daily station report.
+/// </summary>
+public record DailyStationSalaryPaymentRowDto(
+    int Employees,
+    double Amount,
+    string RecordedBy,
+    string Date);
+
 public record DailyStationReportDto(
     string StationName,
     string From,
@@ -101,7 +112,113 @@ public record DailyStationReportDto(
     IReadOnlyList<DailyStationExchangeRowDto> ExchangeFromStation,
     IReadOnlyList<DailyStationCashTakenRowDto> CashTakenFromStation,
     IReadOnlyList<DailyStationAmountRowDto> ExpenseFromOffice,
-    IReadOnlyList<DailyStationExchangeRowDto> ExchangeFromOffice);
+    IReadOnlyList<DailyStationExchangeRowDto> ExchangeFromOffice,
+    IReadOnlyList<DailyStationSalaryPaymentRowDto> SalaryPayments);
+
+public record SupplierReportRowDto(
+    int Id,
+    string Name,
+    string Description,
+    double? Liters,
+    double Amount,
+    double Paid,
+    double Balance,
+    string Date,
+    int? PurchaseId,
+    string? ReferenceNo);
+
+public record SupplierReportDto(
+    string From,
+    string To,
+    int? SupplierId,
+    string? SupplierName,
+    IReadOnlyList<SupplierReportRowDto> Rows,
+    double TotalCharged,
+    double TotalPaid,
+    double Balance);
+
+public record CustomerReportRowDto(
+    int Id,
+    int CustomerId,
+    string Name,
+    string Phone,
+    string Description,
+    string? Type,
+    int? FuelTypeId,
+    string? FuelTypeName,
+    double? Liters,
+    double? Price,
+    double CashTaken,
+    double Charged,
+    double Paid,
+    double Balance,
+    string Date,
+    string? ReferenceNo);
+
+public record CustomerReportDto(
+    string From,
+    string To,
+    int CustomerId,
+    string? CustomerName,
+    string? CustomerPhone,
+    IReadOnlyList<CustomerReportRowDto> Rows,
+    double TotalCharged,
+    double TotalCashTaken,
+    double TotalLiters,
+    double TotalPaid,
+    double Balance);
+
+public record EmployeeOptionDto(
+    int Id,
+    string Name,
+    string Phone,
+    string Position,
+    double BaseSalary,
+    int? StationId,
+    bool HasSalaryForPeriod);
+
+public record EmployeePaymentHistoryRowDto(
+    int Id,
+    string Date,
+    string Description,
+    string? PeriodLabel,
+    double Charged,
+    double Paid,
+    double Balance,
+    string? ReferenceNo,
+    int? StationId);
+
+public record EmployeePaymentHistoryDto(
+    string From,
+    string To,
+    int EmployeeId,
+    string EmployeeName,
+    string EmployeePhone,
+    string EmployeePosition,
+    double BaseSalary,
+    IReadOnlyList<EmployeePaymentHistoryRowDto> Rows,
+    double TotalCharged,
+    double TotalPaid,
+    double OutstandingBalance);
+
+public record PayrollEmployeeStatusRowDto(
+    int EmployeeId,
+    string Name,
+    string Phone,
+    string Position,
+    int? StationId,
+    double BaseSalary,
+    double TotalCharged,
+    double TotalPaid,
+    double Balance,
+    string? LastPaymentDate);
+
+public record PayrollStatusReportDto(
+    int BusinessId,
+    string Period,
+    int? StationId,
+    IReadOnlyList<PayrollEmployeeStatusRowDto> Paid,
+    IReadOnlyList<PayrollEmployeeStatusRowDto> Unpaid);
 
 [ApiController]
 [Route("api/[controller]")]
@@ -126,15 +243,16 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
     }
 
     /// <summary>
-    /// SuperAdmin: optional query station (null = all). Others: JWT station locks scope when set; else optional query station validated against business (e.g. Admin workspace).
+    /// SuperAdmin: optional query station (null = all). Others: explicit <paramref name="queryStationId"/>
+    /// wins when valid for the business (so mobile pickers work); JWT <c>station_id</c> only pins scope for
+    /// users who are not Admin/Manager/Accountant. If no query station, fall back to JWT station when set.
     /// </summary>
     private async Task<(int? StationFilter, IActionResult? Error)> ResolveReportStationAsync(int businessId, int? queryStationId)
     {
         if (IsSuperAdmin(User))
             return queryStationId is > 0 ? (queryStationId, null) : (null, null);
 
-        if (TryGetJwtStation(out var js) && js > 0)
-            return (js, null);
+        var jwtPinned = TryGetJwtStation(out var js) && js > 0 ? js : (int?)null;
 
         if (queryStationId is > 0)
         {
@@ -142,11 +260,23 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
                 .FirstOrDefaultAsync(x => x.Id == queryStationId.Value && !x.IsDeleted);
             if (st is null || st.BusinessId != businessId)
                 return (null, BadRequest("Invalid station for this business."));
+
+            if (jwtPinned is int pinned
+                && pinned != queryStationId.Value
+                && !IsBusinessWideStationScope(User))
+                return (null, Forbid());
+
             return (queryStationId, null);
         }
 
+        if (jwtPinned is int j)
+            return (j, null);
+
         return (null, null);
     }
+
+    private static bool IsBusinessWideStationScope(ClaimsPrincipal user) =>
+        user.IsInRole("Admin") || user.IsInRole("Manager") || user.IsInRole("Accountant");
 
     private bool ResolveBusiness(int queryBusinessId, out int bid, out IActionResult? err)
     {
@@ -180,6 +310,38 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
         return true;
     }
 
+    /// <summary>
+    /// Interprets the first yyyy-MM-dd from a query (<c>2026-05-08</c> or ISO <c>2026-05-08T12:34:56</c>)
+    /// as the user's calendar date, without UTC model-binding shifting the day.
+    /// </summary>
+    private static bool TryParseCalendarDateQuery(string? value, out DateTime dayLocal)
+    {
+        dayLocal = default;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var s = value.Trim();
+        ReadOnlySpan<char> head = s.Length >= 10 ? s.AsSpan(0, 10) : s.AsSpan();
+
+        if (head.Length != 10 ||
+            head[4] != '-' ||
+            head[7] != '-' ||
+            !int.TryParse(head.Slice(0, 4), out var y) ||
+            !int.TryParse(head.Slice(5, 2), out var mo) ||
+            !int.TryParse(head.Slice(8, 2), out var dom))
+            return false;
+
+        try
+        {
+            dayLocal = new DateTime(y, mo, dom, 0, 0, 0, DateTimeKind.Unspecified);
+            return true;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return false;
+        }
+    }
+
     private static string ClassifyCashOutKind(Expense e)
     {
         if (string.Equals(e.Type, "cashOrUsdTaken", StringComparison.OrdinalIgnoreCase))
@@ -203,7 +365,8 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
         int? stationFilter,
         DateTime? from,
         DateTime? to,
-        string? expenseType = null)
+        string? expenseType = null,
+        string? sideAction = null)
     {
         var q = db.Expenses.AsNoTracking().Where(x => !x.IsDeleted && x.BusinessId == bid);
         if (from.HasValue)
@@ -214,22 +377,30 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
             q = q.Where(x => x.Date < toExclusive);
         }
 
-        if (stationFilter is > 0)
+        // Management entries are business-level; ignore the station filter for them so they
+        // surface regardless of which station the user is viewing.
+        if (stationFilter is > 0 && !string.Equals(sideAction, "Management", StringComparison.OrdinalIgnoreCase))
             q = q.Where(x => x.StationId == stationFilter.Value);
         if (!string.IsNullOrWhiteSpace(expenseType))
             q = q.Where(x => x.Type == expenseType);
+        if (!string.IsNullOrWhiteSpace(sideAction))
+            q = q.Where(x => x.SideAction == sideAction);
 
         var items = await q
             .OrderBy(x => x.Date)
             .ThenBy(x => x.Id)
             .ToListAsync();
 
+        var curCodes = await db.Currencies.AsNoTracking()
+            .Where(c => !c.IsDeleted)
+            .ToDictionaryAsync(c => c.Id, c => (c.Code ?? "USD").Trim());
+
         var lines = items.Select(e => new CashOutDailyLineDto(
             e.Id,
             e.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             ClassifyCashOutKind(e),
             e.Description,
-            string.IsNullOrWhiteSpace(e.CurrencyCode) ? "USD" : e.CurrencyCode,
+            curCodes.TryGetValue(e.CurrencyId, out var cc) ? cc : "USD",
             e.LocalAmount,
             e.Rate,
             e.AmountUsd,
@@ -250,7 +421,7 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
         {
             var code = (r.CurrencyCode ?? string.Empty).Trim().ToUpperInvariant();
             if (code == "USD")
-                usdCurrencyOnly += r.LocalAmount;
+                usdCurrencyOnly += r.AmountUsd;
             else
             {
                 localNonUsd += r.LocalAmount;
@@ -292,7 +463,8 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
         [FromQuery] DateTime? from = null,
         [FromQuery] DateTime? to = null,
         [FromQuery] int? stationId = null,
-        [FromQuery] string? expenseType = null)
+        [FromQuery] string? expenseType = null,
+        [FromQuery] string? sideAction = null)
     {
         if (!ResolveBusiness(businessId, out var bid, out var err))
             return err!;
@@ -301,7 +473,7 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
         if (stationErr != null)
             return stationErr;
 
-        return Ok(await BuildCashOutDailyReportAsync(bid, stationFilter, from, to, expenseType));
+        return Ok(await BuildCashOutDailyReportAsync(bid, stationFilter, from, to, expenseType, sideAction));
     }
 
     /// <summary>
@@ -312,7 +484,8 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
         [FromQuery] int businessId,
         [FromQuery] DateTime from,
         [FromQuery] DateTime to,
-        [FromQuery] int? stationId = null)
+        [FromQuery] int? stationId = null,
+        [FromQuery] string? sideAction = null)
     {
         if (!ResolveBusiness(businessId, out var bid, out var err))
             return err!;
@@ -389,9 +562,9 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
             }
         }
 
-        var periodCashOut = await BuildCashOutDailyReportAsync(bid, stationFilter, fromDay, toDay, null);
+        var periodCashOut = await BuildCashOutDailyReportAsync(bid, stationFilter, fromDay, toDay, null, sideAction);
         var previousTo = fromDay.AddDays(-1);
-        var previousCashOut = await BuildCashOutDailyReportAsync(bid, stationFilter, null, previousTo, null);
+        var previousCashOut = await BuildCashOutDailyReportAsync(bid, stationFilter, null, previousTo, null, sideAction);
 
         var prevOut = SumCashOutLineSplits(previousCashOut.Lines);
         var periodOut = SumCashOutLineSplits(periodCashOut.Lines);
@@ -482,7 +655,7 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
                     x.g.StationId,
                     x.g.FuelTypeId,
                     x.FuelName,
-                    x.g.Name ?? string.Empty,
+                    x.g.Customer.Name ?? string.Empty,
                     x.g.Price,
                     liters,
                     amount,
@@ -541,6 +714,13 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
         var fromInclusive = fromDay;
         var toExclusive = toDay.AddDays(1);
         var stationIdVal = effectiveStationId.Value;
+
+        var expenseCurrencyCodes = await db.Currencies.AsNoTracking()
+            .Where(c => !c.IsDeleted)
+            .ToDictionaryAsync(c => c.Id, c => (c.Code ?? "").Trim());
+        bool IsUsdExpense(Expense e) =>
+            expenseCurrencyCodes.TryGetValue(e.CurrencyId, out var code) &&
+            string.Equals(code, "USD", StringComparison.OrdinalIgnoreCase);
 
         var fuelPriceRows = await (
             from fp in db.FuelPrices.AsNoTracking()
@@ -605,11 +785,12 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
                 e.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
             .ToList();
 
+        // For currencies stored as USD the local lane is zero; USD column uses AmountUsd.
         var exchangeFromStation = stationExpenses
             .Where(e => string.Equals(e.Type, "Exchange", StringComparison.OrdinalIgnoreCase))
             .Select(e => new DailyStationExchangeRowDto(
-                e.LocalAmount,
-                e.Rate,
+                IsUsdExpense(e) ? 0 : e.LocalAmount,
+                IsUsdExpense(e) ? 0 : e.Rate,
                 e.AmountUsd,
                 e.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
             .ToList();
@@ -617,7 +798,7 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
         var cashTakenFromStation = stationExpenses
             .Where(e => string.Equals(e.Type, "cashOrUsdTaken", StringComparison.OrdinalIgnoreCase))
             .Select(e => new DailyStationCashTakenRowDto(
-                e.LocalAmount,
+                IsUsdExpense(e) ? 0 : e.LocalAmount,
                 e.AmountUsd,
                 e.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
             .ToList();
@@ -633,8 +814,8 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
         var exchangeFromOffice = officeExpenses
             .Where(e => string.Equals(e.Type, "Exchange", StringComparison.OrdinalIgnoreCase))
             .Select(e => new DailyStationExchangeRowDto(
-                e.LocalAmount,
-                e.Rate,
+                IsUsdExpense(e) ? 0 : e.LocalAmount,
+                IsUsdExpense(e) ? 0 : e.Rate,
                 e.AmountUsd,
                 e.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
             .ToList();
@@ -720,6 +901,35 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
                 g.Key.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
             .ToList();
 
+        // Business-wide (same idea as expense/exchange from office): all salary cash-outs in range, not station-scoped.
+        var salaryPaymentRaw = await (
+            from ep in db.EmployeePayments.AsNoTracking()
+            join e in db.Employees.AsNoTracking() on ep.EmployeeId equals e.Id
+            join u in db.Users.AsNoTracking() on ep.UserId equals u.Id
+            where !ep.IsDeleted && !e.IsDeleted && !u.IsDeleted
+                  && ep.BusinessId == bid
+                  && ep.PaymentDate >= fromInclusive && ep.PaymentDate < toExclusive
+                  && ep.PaidAmount > 0.00001
+            select new
+            {
+                ep.EmployeeId,
+                ep.PaidAmount,
+                ep.UserId,
+                UserName = u.Name ?? string.Empty,
+                Day = ep.PaymentDate.Date,
+            }).ToListAsync();
+
+        var salaryPayments = salaryPaymentRaw
+            .GroupBy(x => new { x.UserId, x.Day, x.UserName })
+            .Select(g => new DailyStationSalaryPaymentRowDto(
+                g.Select(x => x.EmployeeId).Distinct().Count(),
+                Math.Round(g.Sum(x => x.PaidAmount), 2, MidpointRounding.AwayFromZero),
+                g.Key.UserName.Trim(),
+                g.Key.Day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
+            .OrderBy(x => x.Date)
+            .ThenBy(x => x.RecordedBy)
+            .ToList();
+
         var dto = new DailyStationReportDto(
             selectedStation.Name,
             fromDay.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
@@ -730,9 +940,548 @@ public class OperationReportsController(GasStationDBContext db) : ControllerBase
             exchangeFromStation,
             cashTakenFromStation,
             expenseFromOffice,
-            exchangeFromOffice
+            exchangeFromOffice,
+            salaryPayments
         );
 
         return Ok(dto);
+    }
+
+    /// <summary>
+    /// Supplier ledger report — every "Purchased" / "Payment" row for a supplier within a business
+    /// and date range, with running balance. Liters come from the linked Purchase's items.
+    /// </summary>
+    [HttpGet("supplier-report")]
+    public async Task<IActionResult> SupplierReport(
+        [FromQuery] int businessId,
+        [FromQuery] int? supplierId = null,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null)
+    {
+        if (!ResolveBusiness(businessId, out var bid, out var err))
+            return err!;
+
+        var fromDay = from?.Date;
+        var toDay = to?.Date;
+        if (fromDay.HasValue && toDay.HasValue && fromDay.Value > toDay.Value)
+            return BadRequest("from must be on or before to.");
+
+        Supplier? supplier = null;
+        if (supplierId is > 0)
+        {
+            supplier = await db.Suppliers.AsNoTracking()
+                .FirstOrDefaultAsync(x => !x.IsDeleted && x.Id == supplierId.Value && x.BusinessId == bid);
+            if (supplier is null)
+                return BadRequest("Supplier not found or does not belong to this business.");
+        }
+
+        var ledgerQuery =
+            from p in db.SupplierPayments.AsNoTracking()
+            join s in db.Suppliers.AsNoTracking() on p.SupplierId equals s.Id
+            where !p.IsDeleted && !s.IsDeleted && p.BusinessId == bid
+            select new { p, SupplierName = s.Name };
+
+        if (supplierId is > 0)
+            ledgerQuery = ledgerQuery.Where(x => x.p.SupplierId == supplierId.Value);
+        if (fromDay.HasValue)
+            ledgerQuery = ledgerQuery.Where(x => x.p.Date >= fromDay.Value);
+        if (toDay.HasValue)
+        {
+            var toExclusive = toDay.Value.AddDays(1);
+            ledgerQuery = ledgerQuery.Where(x => x.p.Date < toExclusive);
+        }
+
+        var ledger = await ledgerQuery
+            .OrderBy(x => x.p.Date)
+            .ThenBy(x => x.p.Id)
+            .ToListAsync();
+
+        var purchaseIds = ledger
+            .Where(x => x.p.PurchaseId.HasValue)
+            .Select(x => x.p.PurchaseId!.Value)
+            .Distinct()
+            .ToList();
+
+        var litersByPurchase = new Dictionary<int, double>();
+        if (purchaseIds.Count > 0)
+        {
+            var litersRows = await db.PurchaseItems.AsNoTracking()
+                .Where(x => !x.IsDeleted && purchaseIds.Contains(x.PurchaseId))
+                .GroupBy(x => x.PurchaseId)
+                .Select(g => new { PurchaseId = g.Key, Liters = g.Sum(x => x.Liters) })
+                .ToListAsync();
+            foreach (var lr in litersRows)
+                litersByPurchase[lr.PurchaseId] = lr.Liters;
+        }
+
+        var rows = ledger.Select(x => new SupplierReportRowDto(
+            Id: x.p.Id,
+            Name: x.SupplierName ?? string.Empty,
+            Description: string.IsNullOrWhiteSpace(x.p.Description) ? "Payment" : x.p.Description,
+            Liters: x.p.PurchaseId.HasValue && litersByPurchase.TryGetValue(x.p.PurchaseId.Value, out var l) ? l : null,
+            Amount: x.p.ChargedAmount,
+            Paid: x.p.PaidAmount,
+            Balance: x.p.Balance,
+            Date: x.p.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            PurchaseId: x.p.PurchaseId,
+            ReferenceNo: x.p.ReferenceNo
+        )).ToList();
+
+        var totalCharged = Math.Round(rows.Sum(r => r.Amount), 2, MidpointRounding.AwayFromZero);
+        var totalPaid = Math.Round(rows.Sum(r => r.Paid), 2, MidpointRounding.AwayFromZero);
+        var endingBalance = rows.Count > 0 ? rows[^1].Balance : 0;
+        if (supplierId is null or <= 0)
+        {
+            // Without a single supplier filter, the per-row Balance snapshots come from different
+            // suppliers and are not a single running balance — surface charged−paid for the period instead.
+            endingBalance = Math.Round(totalCharged - totalPaid, 2, MidpointRounding.AwayFromZero);
+        }
+
+        var dto = new SupplierReportDto(
+            From: fromDay?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
+            To: toDay?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
+            SupplierId: supplierId,
+            SupplierName: supplier?.Name,
+            Rows: rows,
+            TotalCharged: totalCharged,
+            TotalPaid: totalPaid,
+            Balance: endingBalance
+        );
+        return Ok(dto);
+    }
+
+    /// <summary>
+    /// Customer ledger report — each fuel/cash line from <see cref="CustomerFuelTransaction"/> plus
+    /// non–rolled-up <see cref="CustomerPayment"/> rows (excludes Description "Charged"), merged by date with running balance.
+    /// </summary>
+    [HttpGet("customer-report")]
+    public async Task<IActionResult> CustomerReport(
+        [FromQuery] int businessId,
+        [FromQuery] int customerId,
+        [FromQuery] string? from = null,
+        [FromQuery] string? to = null)
+    {
+        if (!ResolveBusiness(businessId, out var bid, out var err))
+            return err!;
+
+        if (customerId <= 0)
+            return BadRequest("customerId is required.");
+
+        var customer = await db.Customers.AsNoTracking()
+            .FirstOrDefaultAsync(x => !x.IsDeleted && x.Id == customerId && x.BusinessId == bid);
+        if (customer is null) return NotFound();
+
+        DateTime? fromDay = TryParseCalendarDateQuery(from, out var fd) ? fd : null;
+        DateTime? toDay = TryParseCalendarDateQuery(to, out var td) ? td : null;
+
+        if (fromDay is null && !string.IsNullOrWhiteSpace(from))
+            return BadRequest("Invalid from date; expected yyyy-MM-dd.");
+        if (toDay is null && !string.IsNullOrWhiteSpace(to))
+            return BadRequest("Invalid to date; expected yyyy-MM-dd.");
+
+        if (fromDay.HasValue && toDay.HasValue && fromDay.Value > toDay.Value)
+            return BadRequest("from must be on or before to.");
+
+        // Ledger rows for the report must come from CustomerFuelGivens (per fuel/cash line with liters/price)
+        // plus CustomerPayments that are not the rolled-up "Charged" mirror row (that row duplicates cfg totals).
+        var fuelTypeNames = await db.FuelTypes.AsNoTracking()
+            .Where(f => !f.IsDeleted && f.BusinessId == bid)
+            .ToDictionaryAsync(f => f.Id, f => f.FuelName);
+
+        var cfgBase = db.CustomerFuelGivens.AsNoTracking()
+            .Where(x => !x.IsDeleted && x.BusinessId == bid && x.CustomerId == customerId);
+
+        double opening = 0;
+        if (fromDay.HasValue)
+        {
+            var openingCutoff = fromDay.Value;
+            var openingCfgs = await cfgBase.Where(x => x.Date < openingCutoff).ToListAsync();
+            foreach (var c in openingCfgs)
+                opening += CustomerPaymentRepository.ChargedFromCfg(c);
+
+            var openingPayments = await db.CustomerPayments.AsNoTracking()
+                .Where(x => !x.IsDeleted
+                            && x.BusinessId == bid
+                            && x.CustomerId == customerId
+                            && x.Description != "Charged"
+                            && x.PaymentDate < openingCutoff)
+                .ToListAsync();
+            foreach (var p in openingPayments)
+                opening += p.ChargedAmount - p.AmountPaid;
+        }
+
+        opening = Math.Round(opening, 2, MidpointRounding.AwayFromZero);
+
+        var cfgQuery = cfgBase;
+        if (fromDay.HasValue)
+            cfgQuery = cfgQuery.Where(x => x.Date >= fromDay.Value);
+        if (toDay.HasValue)
+        {
+            var toExclusive = toDay.Value.AddDays(1);
+            cfgQuery = cfgQuery.Where(x => x.Date < toExclusive);
+        }
+
+        var cfgs = await cfgQuery.ToListAsync();
+
+        var payQuery = db.CustomerPayments.AsNoTracking()
+            .Where(x => !x.IsDeleted
+                        && x.BusinessId == bid
+                        && x.CustomerId == customerId
+                        && x.Description != "Charged");
+        if (fromDay.HasValue)
+            payQuery = payQuery.Where(x => x.PaymentDate >= fromDay.Value);
+        if (toDay.HasValue)
+        {
+            var toExclusive = toDay.Value.AddDays(1);
+            payQuery = payQuery.Where(x => x.PaymentDate < toExclusive);
+        }
+
+        var payments = await payQuery.ToListAsync();
+
+        var merged = new List<(DateTime SortDate, int SortId, int Kind, CustomerFuelTransaction? Cfg, CustomerPayment? Pay)>();
+        foreach (var c in cfgs)
+            merged.Add((c.Date, c.Id, 0, c, null));
+        foreach (var p in payments)
+            merged.Add((p.PaymentDate, p.Id, 1, null, p));
+
+        merged.Sort((a, b) =>
+        {
+            var cmp = a.SortDate.CompareTo(b.SortDate);
+            if (cmp != 0) return cmp;
+            cmp = a.SortId.CompareTo(b.SortId);
+            if (cmp != 0) return cmp;
+            return a.Kind.CompareTo(b.Kind);
+        });
+
+        var rows = new List<CustomerReportRowDto>(merged.Count);
+        var running = opening;
+        foreach (var m in merged)
+        {
+            if (m.Cfg is { } cfg)
+            {
+                var charged = Math.Round(CustomerPaymentRepository.ChargedFromCfg(cfg), 2, MidpointRounding.AwayFromZero);
+                var isFuel = string.Equals(cfg.Type, "Fuel", StringComparison.OrdinalIgnoreCase);
+                running = Math.Round(running + charged, 2, MidpointRounding.AwayFromZero);
+                fuelTypeNames.TryGetValue(cfg.FuelTypeId, out var fuelName);
+                rows.Add(new CustomerReportRowDto(
+                    Id: -cfg.Id,
+                    CustomerId: customerId,
+                    Name: customer.Name,
+                    Phone: customer.Phone,
+                    Description: isFuel ? "Fuel" : "Cash",
+                    Type: cfg.Type,
+                    FuelTypeId: isFuel ? cfg.FuelTypeId : null,
+                    FuelTypeName: isFuel ? fuelName : null,
+                    Liters: isFuel ? cfg.GivenLiter : null,
+                    Price: isFuel ? cfg.Price : null,
+                    CashTaken: charged,
+                    Charged: charged,
+                    Paid: 0,
+                    Balance: running,
+                    Date: cfg.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    ReferenceNo: string.IsNullOrWhiteSpace(cfg.Remark) ? null : cfg.Remark.Trim()));
+            }
+            else if (m.Pay is { } x)
+            {
+                var ch = Math.Round(x.ChargedAmount, 2, MidpointRounding.AwayFromZero);
+                var paid = Math.Round(x.AmountPaid, 2, MidpointRounding.AwayFromZero);
+                running = Math.Round(running + ch - paid, 2, MidpointRounding.AwayFromZero);
+                rows.Add(new CustomerReportRowDto(
+                    Id: x.Id,
+                    CustomerId: customerId,
+                    Name: customer.Name,
+                    Phone: customer.Phone,
+                    Description: string.IsNullOrWhiteSpace(x.Description) ? "Payment" : x.Description,
+                    Type: null,
+                    FuelTypeId: null,
+                    FuelTypeName: null,
+                    Liters: null,
+                    Price: null,
+                    CashTaken: ch,
+                    Charged: ch,
+                    Paid: paid,
+                    Balance: running,
+                    Date: x.PaymentDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    ReferenceNo: x.ReferenceNo));
+            }
+        }
+
+        var totalCharged = Math.Round(rows.Sum(r => r.Charged), 2, MidpointRounding.AwayFromZero);
+        var totalPaid = Math.Round(rows.Sum(r => r.Paid), 2, MidpointRounding.AwayFromZero);
+        var totalCash = Math.Round(rows.Sum(r => r.CashTaken), 2, MidpointRounding.AwayFromZero);
+        var totalLiters = Math.Round(rows.Sum(r => r.Liters ?? 0), 3, MidpointRounding.AwayFromZero);
+        var endingBalance = rows.Count > 0 ? rows[^1].Balance : opening;
+
+        var dto = new CustomerReportDto(
+            From: fromDay?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
+            To: toDay?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
+            CustomerId: customerId,
+            CustomerName: customer.Name,
+            CustomerPhone: customer.Phone,
+            Rows: rows,
+            TotalCharged: totalCharged,
+            TotalCashTaken: totalCash,
+            TotalLiters: totalLiters,
+            TotalPaid: totalPaid,
+            Balance: endingBalance
+        );
+        return Ok(dto);
+    }
+
+    /// <summary>Distinct customers for a business (fuel ledger and/or customer payment ledger). Used by the Customer Report picker.</summary>
+    [HttpGet("customers")]
+    public async Task<IActionResult> CustomersList([FromQuery] int businessId)
+    {
+        if (!ResolveBusiness(businessId, out var bid, out var err))
+            return err!;
+
+        var fuelLastByCustomer = await db.CustomerFuelGivens.AsNoTracking()
+            .Where(x => !x.IsDeleted && x.BusinessId == bid)
+            .GroupBy(x => x.CustomerId)
+            .Select(g => new { CustomerId = g.Key, LastDate = g.Max(x => x.Date) })
+            .ToDictionaryAsync(x => x.CustomerId, x => x.LastDate);
+
+        var paymentLastByCustomer = await db.CustomerPayments.AsNoTracking()
+            .Where(p => !p.IsDeleted && p.BusinessId == bid)
+            .GroupBy(p => p.CustomerId)
+            .Select(g => new { CustomerId = g.Key, LastDate = g.Max(x => x.PaymentDate) })
+            .ToDictionaryAsync(x => x.CustomerId, x => x.LastDate);
+
+        var allIds = fuelLastByCustomer.Keys.AsEnumerable().Union(paymentLastByCustomer.Keys).Distinct().ToList();
+        if (allIds.Count == 0)
+            return Ok(Array.Empty<object>());
+
+        var customers = await db.Customers.AsNoTracking()
+            .Where(c => !c.IsDeleted && c.BusinessId == bid && allIds.Contains(c.Id))
+            .Select(c => new { c.Id, c.Name, c.Phone })
+            .ToListAsync();
+
+        var rows = customers
+            .Select(c =>
+            {
+                fuelLastByCustomer.TryGetValue(c.Id, out var fuelD);
+                paymentLastByCustomer.TryGetValue(c.Id, out var payD);
+                var last = fuelD > payD ? fuelD : payD;
+                return new
+                {
+                    customerId = c.Id,
+                    name = c.Name,
+                    phone = c.Phone,
+                    lastDate = last,
+                };
+            })
+            .OrderByDescending(x => x.lastDate)
+            .ToList();
+        return Ok(rows);
+    }
+
+    /// <summary>Active employees for the report pickers / payroll runs (optionally filtered by station).</summary>
+    [HttpGet("employees")]
+    public async Task<IActionResult> EmployeesList(
+        [FromQuery] int businessId,
+        [FromQuery] int? stationId = null,
+        [FromQuery] bool includeInactive = false,
+        [FromQuery] string? period = null)
+    {
+        if (!ResolveBusiness(businessId, out var bid, out var err)) return err!;
+        var (stationFilter, stationErr) = await ResolveReportStationAsync(bid, stationId);
+        if (stationErr is not null) return stationErr;
+
+        var q = db.Employees.AsNoTracking().Where(x => !x.IsDeleted && x.BusinessId == bid);
+        if (!includeInactive) q = q.Where(x => x.IsActive);
+        if (stationFilter is > 0) q = q.Where(x => x.StationId == stationFilter.Value);
+
+        var list = await q
+            .OrderBy(x => x.Name)
+            .Select(x => new { x.Id, x.Name, x.Phone, x.Position, x.BaseSalary, x.StationId })
+            .ToListAsync();
+
+        HashSet<int> salaryRecorded = new();
+        var p = (period ?? string.Empty).Trim();
+        if (p.Length > 0)
+        {
+            var ids = await db.EmployeePayments.AsNoTracking()
+                .Where(x => !x.IsDeleted
+                            && x.BusinessId == bid
+                            && x.PeriodLabel == p
+                            && x.Description == "Salary"
+                            && x.ChargedAmount > 0.00001)
+                .Select(x => x.EmployeeId)
+                .Distinct()
+                .ToListAsync();
+            salaryRecorded = ids.ToHashSet();
+        }
+
+        var rows = list
+            .Select(x => new EmployeeOptionDto(
+                x.Id,
+                x.Name,
+                x.Phone,
+                x.Position,
+                x.BaseSalary,
+                x.StationId,
+                salaryRecorded.Contains(x.Id)))
+            .ToList();
+        return Ok(rows);
+    }
+
+    /// <summary>
+    /// Full ledger history for one employee with running balance and final outstanding balance.
+    /// Used by both the Employee Details page and the Employee Payment History report.
+    /// </summary>
+    [HttpGet("employee-payment-history")]
+    public async Task<IActionResult> EmployeePaymentHistory(
+        [FromQuery] int businessId,
+        [FromQuery] int employeeId,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null)
+    {
+        if (!ResolveBusiness(businessId, out var bid, out var err)) return err!;
+        if (employeeId <= 0) return BadRequest("employeeId is required.");
+
+        var employee = await db.Employees.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == employeeId && !x.IsDeleted && x.BusinessId == bid);
+        if (employee is null) return NotFound();
+
+        var fromDay = from?.Date;
+        var toDay = to?.Date;
+        if (fromDay.HasValue && toDay.HasValue && fromDay.Value > toDay.Value)
+            return BadRequest("from must be on or before to.");
+
+        var ledgerQuery = db.EmployeePayments.AsNoTracking()
+            .Where(x => !x.IsDeleted && x.BusinessId == bid && x.EmployeeId == employeeId);
+        if (fromDay.HasValue) ledgerQuery = ledgerQuery.Where(x => x.PaymentDate >= fromDay.Value);
+        if (toDay.HasValue)
+        {
+            var toExclusive = toDay.Value.AddDays(1);
+            ledgerQuery = ledgerQuery.Where(x => x.PaymentDate < toExclusive);
+        }
+
+        var ledger = await ledgerQuery
+            .OrderBy(x => x.PaymentDate)
+            .ThenBy(x => x.Id)
+            .ToListAsync();
+
+        // Outstanding is computed across the full lifetime (not the date range), so reports
+        // always show the actual amount still owed regardless of which window is shown.
+        var lifetime = await db.EmployeePayments.AsNoTracking()
+            .Where(x => !x.IsDeleted && x.BusinessId == bid && x.EmployeeId == employeeId)
+            .Select(x => new { x.ChargedAmount, x.PaidAmount })
+            .ToListAsync();
+        var lifetimeOutstanding = Math.Max(0, lifetime.Sum(x => x.ChargedAmount - x.PaidAmount));
+
+        var rows = ledger.Select(x => new EmployeePaymentHistoryRowDto(
+            Id: x.Id,
+            Date: x.PaymentDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            Description: string.IsNullOrWhiteSpace(x.Description) ? "Payment" : x.Description,
+            PeriodLabel: x.PeriodLabel,
+            Charged: Math.Round(x.ChargedAmount, 2, MidpointRounding.AwayFromZero),
+            Paid: Math.Round(x.PaidAmount, 2, MidpointRounding.AwayFromZero),
+            Balance: Math.Round(x.Balance, 2, MidpointRounding.AwayFromZero),
+            ReferenceNo: x.ReferenceNo,
+            StationId: x.StationId)).ToList();
+
+        var dto = new EmployeePaymentHistoryDto(
+            From: fromDay?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
+            To: toDay?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
+            EmployeeId: employee.Id,
+            EmployeeName: employee.Name,
+            EmployeePhone: employee.Phone,
+            EmployeePosition: employee.Position,
+            BaseSalary: Math.Round(employee.BaseSalary, 2, MidpointRounding.AwayFromZero),
+            Rows: rows,
+            TotalCharged: Math.Round(rows.Sum(r => r.Charged), 2, MidpointRounding.AwayFromZero),
+            TotalPaid: Math.Round(rows.Sum(r => r.Paid), 2, MidpointRounding.AwayFromZero),
+            OutstandingBalance: Math.Round(lifetimeOutstanding, 2, MidpointRounding.AwayFromZero));
+        return Ok(dto);
+    }
+
+    /// <summary>
+    /// Splits active employees into paid / unpaid lists for a given period (e.g. "2026-05").
+    /// "Paid" = at least one EmployeePayment row with a positive PaidAmount in the period; "Unpaid" otherwise.
+    /// </summary>
+    [HttpGet("payroll-status")]
+    public async Task<IActionResult> PayrollStatus(
+        [FromQuery] int businessId,
+        [FromQuery] string period,
+        [FromQuery] int? stationId = null)
+    {
+        if (!ResolveBusiness(businessId, out var bid, out var err)) return err!;
+        if (string.IsNullOrWhiteSpace(period))
+            return BadRequest("period is required, e.g. \"2026-05\".");
+        var p = period.Trim();
+        var (stationFilter, stationErr) = await ResolveReportStationAsync(bid, stationId);
+        if (stationErr is not null) return stationErr;
+
+        var employeeQuery = db.Employees.AsNoTracking()
+            .Where(x => !x.IsDeleted && x.BusinessId == bid && x.IsActive);
+        if (stationFilter is > 0) employeeQuery = employeeQuery.Where(x => x.StationId == stationFilter.Value);
+        var employees = await employeeQuery.OrderBy(x => x.Name).ToListAsync();
+        if (employees.Count == 0)
+        {
+            return Ok(new PayrollStatusReportDto(bid, p, stationFilter, [], []));
+        }
+
+        var employeeIds = employees.Select(e => e.Id).ToList();
+
+        // Period payments — drive paid/unpaid classification.
+        var periodRows = await db.EmployeePayments.AsNoTracking()
+            .Where(x => !x.IsDeleted
+                        && x.BusinessId == bid
+                        && employeeIds.Contains(x.EmployeeId)
+                        && x.PeriodLabel == p)
+            .Select(x => new { x.EmployeeId, x.ChargedAmount, x.PaidAmount, x.PaymentDate })
+            .ToListAsync();
+        var periodGroups = periodRows
+            .GroupBy(x => x.EmployeeId)
+            .ToDictionary(g => g.Key, g => new
+            {
+                Charged = g.Sum(r => r.ChargedAmount),
+                Paid = g.Sum(r => r.PaidAmount),
+                Last = g.Max(r => r.PaymentDate),
+            });
+
+        // Lifetime balance — used as the outstanding amount for unpaid rows.
+        var lifetimeRows = await db.EmployeePayments.AsNoTracking()
+            .Where(x => !x.IsDeleted && x.BusinessId == bid && employeeIds.Contains(x.EmployeeId))
+            .Select(x => new { x.EmployeeId, x.ChargedAmount, x.PaidAmount })
+            .ToListAsync();
+        var lifetimeGroups = lifetimeRows
+            .GroupBy(x => x.EmployeeId)
+            .ToDictionary(g => g.Key, g => new
+            {
+                Charged = g.Sum(r => r.ChargedAmount),
+                Paid = g.Sum(r => r.PaidAmount),
+            });
+
+        var paid = new List<PayrollEmployeeStatusRowDto>();
+        var unpaid = new List<PayrollEmployeeStatusRowDto>();
+        foreach (var emp in employees)
+        {
+            var periodInfo = periodGroups.GetValueOrDefault(emp.Id);
+            var lifetime = lifetimeGroups.GetValueOrDefault(emp.Id);
+            var lifetimeBalance = lifetime is null
+                ? 0
+                : Math.Max(0, lifetime.Charged - lifetime.Paid);
+
+            var row = new PayrollEmployeeStatusRowDto(
+                EmployeeId: emp.Id,
+                Name: emp.Name,
+                Phone: emp.Phone,
+                Position: emp.Position,
+                StationId: emp.StationId,
+                BaseSalary: Math.Round(emp.BaseSalary, 2, MidpointRounding.AwayFromZero),
+                TotalCharged: Math.Round(periodInfo?.Charged ?? 0, 2, MidpointRounding.AwayFromZero),
+                TotalPaid: Math.Round(periodInfo?.Paid ?? 0, 2, MidpointRounding.AwayFromZero),
+                Balance: Math.Round(lifetimeBalance, 2, MidpointRounding.AwayFromZero),
+                LastPaymentDate: periodInfo is null
+                    ? null
+                    : periodInfo.Last.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+
+            if (periodInfo is not null && periodInfo.Paid > 1e-6) paid.Add(row);
+            else unpaid.Add(row);
+        }
+
+        return Ok(new PayrollStatusReportDto(bid, p, stationFilter, paid, unpaid));
     }
 }

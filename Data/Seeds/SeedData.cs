@@ -418,6 +418,31 @@ public static class SeedData
             ],
         };
 
+        var employeesMenu = new Menu
+        {
+            Name = "Employees",
+            Route = "/employees",
+            CreatedAt = now,
+            UpdatedAt = now,
+            SubMenus =
+            [
+                new SubMenu { Name = "Employees", Route = "/employees", CreatedAt = now, UpdatedAt = now },
+            ],
+        };
+
+        var payrollsMenu = new Menu
+        {
+            Name = "Payrolls",
+            Route = "/payrolls",
+            CreatedAt = now,
+            UpdatedAt = now,
+            SubMenus =
+            [
+                new SubMenu { Name = "Record payment", Route = "/payrolls", CreatedAt = now, UpdatedAt = now },
+                new SubMenu { Name = "Payroll runs", Route = "/payrolls/runs", CreatedAt = now, UpdatedAt = now },
+            ],
+        };
+
         var accounting = new Menu
         {
             Name = "Accounting",
@@ -481,6 +506,11 @@ public static class SeedData
                 new SubMenu { Name = "General daily report", Route = "/reports/general-daily", CreatedAt = now, UpdatedAt = now },
                 new SubMenu { Name = "Inventory daily", Route = "/reports/inventory-daily", CreatedAt = now, UpdatedAt = now },
                 new SubMenu { Name = "Outstanding customers", Route = "/reports/outstanding-customers", CreatedAt = now, UpdatedAt = now },
+                new SubMenu { Name = "Supplier report", Route = "/reports/supplier", CreatedAt = now, UpdatedAt = now },
+                new SubMenu { Name = "Customer report", Route = "/reports/customer", CreatedAt = now, UpdatedAt = now },
+                new SubMenu { Name = "Paid employees", Route = "/reports/payroll-paid", CreatedAt = now, UpdatedAt = now },
+                new SubMenu { Name = "Unpaid employees", Route = "/reports/payroll-unpaid", CreatedAt = now, UpdatedAt = now },
+                new SubMenu { Name = "Employee payment history", Route = "/reports/employee-payment-history", CreatedAt = now, UpdatedAt = now },
             ],
         };
 
@@ -488,6 +518,8 @@ public static class SeedData
             suppliersMenu,
             purchasesMenu,
             customersMenu,
+            employeesMenu,
+            payrollsMenu,
             accounting,
             payments,
             financialReports,
@@ -535,6 +567,16 @@ public static class SeedData
             ("Expense reports", "/reports/expenses", "Expense reports"),
             ("Exchange reports", "/reports/exchange", "Exchange reports"),
             ("Cash or USD Taken reports", "/reports/cash-usd-taken", "Cash or USD Taken reports"),
+            ("Supplier report", "/reports/supplier", "Supplier report"),
+            ("Customer report", "/reports/customer", "Customer report"),
+            ("Daily station report", "/reports/daily-station", "Daily station report"),
+            ("Supplier payments", "/supplier-payments", "Supplier payments"),
+            ("Employees", "/employees", "Employees"),
+            ("Record payment", "/payrolls", "Record payment"),
+            ("Payroll runs", "/payrolls/runs", "Payroll runs"),
+            ("Paid employees", "/reports/payroll-paid", "Paid employees"),
+            ("Unpaid employees", "/reports/payroll-unpaid", "Unpaid employees"),
+            ("Employee payment history", "/reports/employee-payment-history", "Employee payment history"),
         ];
 
         foreach (var (menuName, route, subName) in sidebar)

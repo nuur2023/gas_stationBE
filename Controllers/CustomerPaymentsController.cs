@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Security.Claims;
+using gas_station.Common;
 using gas_station.Data.Context;
 using gas_station.Data.Interfaces;
 using gas_station.Models;
@@ -15,7 +16,6 @@ namespace gas_station.Controllers;
 [Authorize]
 public class CustomerPaymentsController(
     ICustomerPaymentRepository repository,
-    ICustomerFuelGivenRepository customerFuelGivenRepository,
     GasStationDBContext dbContext) : ControllerBase
 {
     private const string SuperAdminRole = "SuperAdmin";
@@ -70,22 +70,27 @@ public class CustomerPaymentsController(
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetPaged([FromQuery] int page = 1, [FromQuery] int pageSize = 50, [FromQuery] string? q = null)
+    public async Task<IActionResult> GetPaged(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] string? q = null,
+        [FromQuery] int? filterStationId = null)
     {
         if (IsSuperAdmin(User))
-            return Ok(await repository.GetPagedAsync(page, pageSize, q, null));
+            return Ok(await repository.GetPagedAsync(page, pageSize, q, null, filterStationId));
 
         if (!TryGetJwtBusiness(out var bid))
             return BadRequest("No business assigned to this user.");
-        return Ok(await repository.GetPagedAsync(page, pageSize, q, bid));
+        var stationScope = ListStationFilter.ForNonSuperAdmin(User, filterStationId);
+        return Ok(await repository.GetPagedAsync(page, pageSize, q, bid, stationScope));
     }
 
-    /// <summary>Outstanding balance for a customer fuel-given row (before recording a new payment).</summary>
+    /// <summary>Outstanding balance for a customer (before recording a new payment).</summary>
     [HttpGet("preview-balance")]
-    public async Task<IActionResult> PreviewBalance([FromQuery] int customerFuelGivenId, [FromQuery] int? businessId = null)
+    public async Task<IActionResult> PreviewBalance([FromQuery] int customerId, [FromQuery] int? businessId = null)
     {
-        if (customerFuelGivenId <= 0)
-            return BadRequest("customerFuelGivenId is required.");
+        if (customerId <= 0)
+            return BadRequest("customerId is required.");
 
         int bid;
         if (IsSuperAdmin(User))
@@ -102,24 +107,59 @@ public class CustomerPaymentsController(
                 return Forbid();
         }
 
-        var cfg = await customerFuelGivenRepository.GetByIdAsync(customerFuelGivenId);
-        if (cfg is null || cfg.BusinessId != bid)
+        var customer = await dbContext.Customers.AsNoTracking()
+            .FirstOrDefaultAsync(x => !x.IsDeleted && x.Id == customerId && x.BusinessId == bid);
+        if (customer is null)
             return NotFound();
 
-        var alreadyPaid = await dbContext.CustomerPayments
-            .Where(x => !x.IsDeleted && x.CustomerFuelGivenId == cfg.Id)
-            .SumAsync(x => (double?)x.AmountPaid) ?? 0;
-        var totalDue = cfg.GivenLiter * cfg.Price;
-        var balance = Math.Round(Math.Max(0, totalDue - alreadyPaid), 2, MidpointRounding.AwayFromZero);
+        var balance = await repository.GetCustomerBalanceAsync(bid, customerId);
+        var rows = await dbContext.CustomerPayments.AsNoTracking()
+            .Where(x => !x.IsDeleted
+                        && x.BusinessId == bid
+                        && x.CustomerId == customerId)
+            .Select(x => new { x.ChargedAmount, x.AmountPaid })
+            .ToListAsync();
+        var totalDue = rows.Sum(x => x.ChargedAmount);
+        var totalPaid = rows.Sum(x => x.AmountPaid);
 
         return Ok(new
         {
-            name = cfg.Name,
-            phone = cfg.Phone,
+            name = customer.Name,
+            phone = customer.Phone,
             totalDue = Math.Round(totalDue, 2, MidpointRounding.AwayFromZero),
-            totalPaid = Math.Round(alreadyPaid, 2, MidpointRounding.AwayFromZero),
-            balance,
+            totalPaid = Math.Round(totalPaid, 2, MidpointRounding.AwayFromZero),
+            balance = Math.Round(Math.Max(0, balance), 2, MidpointRounding.AwayFromZero),
         });
+    }
+
+    /// <summary>Outstanding balance for a customer within a business.</summary>
+    [HttpGet("balance")]
+    public async Task<IActionResult> CustomerBalance(
+        [FromQuery] int customerId,
+        [FromQuery] int? businessId = null)
+    {
+        if (customerId <= 0) return BadRequest("customerId is required.");
+
+        int bid;
+        if (IsSuperAdmin(User))
+        {
+            if (businessId is not > 0)
+                return BadRequest("businessId is required.");
+            bid = businessId.Value;
+        }
+        else
+        {
+            if (!TryGetJwtBusiness(out bid))
+                return BadRequest("No business assigned to this user.");
+            if (businessId is > 0 && businessId.Value != bid)
+                return Forbid();
+        }
+
+        var customer = await dbContext.Customers.AsNoTracking()
+            .FirstOrDefaultAsync(x => !x.IsDeleted && x.Id == customerId && x.BusinessId == bid);
+        if (customer is null) return NotFound();
+        var bal = await repository.GetCustomerBalanceAsync(bid, customerId);
+        return Ok(new { businessId = bid, customerId, name = customer.Name, phone = customer.Phone, balance = bal });
     }
 
     [HttpPost]
@@ -128,29 +168,83 @@ public class CustomerPaymentsController(
         if (!ResolveBusiness(dto.BusinessId, out var bid, out var err)) return err!;
         if (!TryGetUserId(out var userId, out var uerr)) return uerr!;
 
-        if (!double.TryParse(dto.AmountPaid.Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var paid) || paid <= 0)
+        if (!double.TryParse((dto.AmountPaid ?? "0").Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var paid) || paid <= 0)
             return BadRequest("Invalid paid amount.");
 
-        var cfg = await customerFuelGivenRepository.GetByIdAsync(dto.CustomerFuelGivenId);
-        if (cfg is null || cfg.BusinessId != bid) return BadRequest("Customer fuel-given not found in this business.");
+        if (dto.CustomerId <= 0) return BadRequest("customerId is required.");
+        var customer = await dbContext.Customers.AsNoTracking()
+            .FirstOrDefaultAsync(x => !x.IsDeleted && x.Id == dto.CustomerId && x.BusinessId == bid);
+        if (customer is null) return BadRequest("Customer not found in this business.");
 
-        var alreadyPaid = await dbContext.CustomerPayments
-            .Where(x => !x.IsDeleted && x.CustomerFuelGivenId == cfg.Id)
-            .SumAsync(x => (double?)x.AmountPaid) ?? 0;
-        var receivable = (cfg.GivenLiter * cfg.Price) - alreadyPaid;
-        if (paid > receivable + 0.0001) return BadRequest("Amount paid exceeds customer outstanding balance.");
+        var paymentDate = dto.PaymentDate?.UtcDateTime ?? DateTime.UtcNow;
+        var refNo = await repository.GenerateReferenceAsync(bid, paymentDate);
 
         var row = new CustomerPayment
         {
-            CustomerFuelGivenId = cfg.Id,
-            AmountPaid = paid,
-            PaymentDate = dto.PaymentDate?.UtcDateTime ?? DateTime.UtcNow,
+            CustomerId = dto.CustomerId,
+            ReferenceNo = refNo,
+            Description = "Payment",
+            ChargedAmount = 0,
+            AmountPaid = Math.Round(paid, 2, MidpointRounding.AwayFromZero),
+            Balance = 0,
+            PaymentDate = paymentDate,
             BusinessId = bid,
             UserId = userId,
         };
 
         var added = await repository.AddAsync(row);
+        await repository.RecalculateCustomerBalancesAsync(bid, dto.CustomerId);
         return Ok(added);
+    }
+
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, [FromBody] CustomerPaymentUpdateRequestViewModel dto)
+    {
+        if (!ResolveBusiness(dto.BusinessId, out var bid, out var err))
+        {
+            return err!;
+        }
+
+        if (!TryGetUserId(out var userId, out var uerr))
+        {
+            return uerr!;
+        }
+
+        var row = await repository.GetByIdAsync(id);
+        if (row is null)
+        {
+            return NotFound();
+        }
+
+        if (row.BusinessId != bid)
+        {
+            return Forbid();
+        }
+
+        if (!string.Equals(row.Description, "Payment", StringComparison.OrdinalIgnoreCase)
+            || row.ChargedAmount > 0.0001)
+        {
+            return BadRequest("Only manual payment rows can be edited.");
+        }
+
+        if (row.AmountPaid <= 0.0001)
+        {
+            return BadRequest("This ledger row cannot be edited.");
+        }
+
+        if (!double.TryParse((dto.AmountPaid ?? "0").Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var paid)
+            || paid <= 0)
+        {
+            return BadRequest("Invalid paid amount.");
+        }
+
+        row.AmountPaid = Math.Round(paid, 2, MidpointRounding.AwayFromZero);
+        row.PaymentDate = dto.PaymentDate?.UtcDateTime ?? row.PaymentDate;
+        row.UserId = userId;
+
+        var updated = await repository.UpdateAsync(id, row);
+        await repository.RecalculateCustomerBalancesAsync(row.BusinessId, row.CustomerId);
+        return Ok(updated);
     }
 
     [HttpDelete("{id:int}")]
@@ -159,7 +253,8 @@ public class CustomerPaymentsController(
         var row = await repository.GetByIdAsync(id);
         if (row is null) return NotFound();
         if (!IsSuperAdmin(User) && (!TryGetJwtBusiness(out var bid) || row.BusinessId != bid)) return Forbid();
-        return Ok(await repository.DeleteAsync(id));
+        var deleted = await repository.DeleteAsync(id);
+        await repository.RecalculateCustomerBalancesAsync(row.BusinessId, row.CustomerId);
+        return Ok(deleted);
     }
 }
-

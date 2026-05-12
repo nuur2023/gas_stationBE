@@ -28,7 +28,8 @@ public class ExpenseWriteRequestViewModel
 
     public string Description { get; set; } = "";
 
-    public string CurrencyCode { get; set; } = "USD";
+    /// <summary>FK to Currencies row (required).</summary>
+    public int CurrencyId { get; set; }
 
     public string LocalAmount { get; set; } = "0";
 
@@ -36,7 +37,8 @@ public class ExpenseWriteRequestViewModel
 
     public string AmountUsd { get; set; } = "0";
 
-    public int StationId { get; set; }
+    /// <summary>Required for Operation entries; ignored / forced to null for Management entries.</summary>
+    public int? StationId { get; set; }
 
     public int BusinessId { get; set; }
 
@@ -108,9 +110,15 @@ public class CustomerFuelGivenWriteRequestViewModel
 
 {
 
+    /// <summary>When &gt; 0, bind to this existing customer (POST). On PUT, if set must match the transaction's customer.</summary>
+    public int CustomerId { get; set; }
+
     public string Name { get; set; } = "";
 
     public string Phone { get; set; } = "";
+
+    /// <summary>"Fuel" (default) or "Cash". Controls which fields are required.</summary>
+    public string Type { get; set; } = "Fuel";
 
     public int FuelTypeId { get; set; }
 
@@ -120,6 +128,12 @@ public class CustomerFuelGivenWriteRequestViewModel
 
     public string AmountUsd { get; set; } = "0";
 
+    /// <summary>Local-currency cash advanced when Type="Cash". 0 for fuel rows.</summary>
+    public string CashAmount { get; set; } = "0";
+
+    /// <summary>FK to Currencies — which currency the amounts are expressed in.</summary>
+    public int CurrencyId { get; set; }
+
     public string? Remark { get; set; }
 
     public int StationId { get; set; }
@@ -128,6 +142,14 @@ public class CustomerFuelGivenWriteRequestViewModel
 
     public DateTimeOffset? Date { get; set; }
 
+}
+
+public class CustomerWriteRequestViewModel
+{
+    public string Name { get; set; } = "";
+    public string Phone { get; set; } = "";
+    public int StationId { get; set; }
+    public int BusinessId { get; set; }
 }
 
 
@@ -164,11 +186,19 @@ public class DippingPumpWriteRequestViewModel
 
 public class SupplierPaymentWriteRequestViewModel
 {
-    public string? ReferenceNo { get; set; }
     public int SupplierId { get; set; }
+    /// <summary>Manual payments only set this; the API ignores it for purchase-driven rows.</summary>
     public string Amount { get; set; } = "0";
     public DateTimeOffset? Date { get; set; }
     /// <summary>SuperAdmin must set; others use JWT business.</summary>
+    public int BusinessId { get; set; }
+}
+
+/// <summary>Update a manual supplier payment row (not purchase-generated ledger lines).</summary>
+public class SupplierPaymentUpdateRequestViewModel
+{
+    public string Amount { get; set; } = "0";
+    public DateTimeOffset? Date { get; set; }
     public int BusinessId { get; set; }
 }
 

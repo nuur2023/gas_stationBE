@@ -14,7 +14,8 @@ namespace gas_station.Controllers;
 public class PurchasesController(
     IPurchaseRepository repository,
     ISupplierRepository supplierRepository,
-    IFuelTypeRepository fuelTypeRepository) : ControllerBase
+    IFuelTypeRepository fuelTypeRepository,
+    ISupplierPaymentRepository supplierPaymentRepository) : ControllerBase
 {
     private const string SuperAdminRole = "SuperAdmin";
 
@@ -158,18 +159,6 @@ public class PurchasesController(
         return (null, item);
     }
 
-    private static string NormalizePurchaseStatus(string? raw)
-    {
-        var s = (raw ?? "").Trim().ToLowerInvariant();
-        return s switch
-        {
-            "paid" => "Paid",
-            "half-paid" => "Half-paid",
-            "half paid" => "Half-paid",
-            _ => "Unpaid",
-        };
-    }
-
     private async Task<(IActionResult? Error, List<PurchaseItem> Items)> ParseItemsAsync(
         List<PurchaseItemWriteRequestViewModel> dtos)
     {
@@ -274,40 +263,37 @@ public class PurchasesController(
             items = parsed;
         }
 
-        var normStatus = NormalizePurchaseStatus(dto.Status);
-        var amountPaid = normStatus == "Unpaid"
-            ? 0
-            : (double.TryParse((dto.AmountPaid ?? "0").Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var ap)
-                ? Math.Max(0, ap)
-                : 0);
-
+        var purchaseDate = dto.PurchaseDate?.UtcDateTime ?? DateTime.UtcNow;
         var purchase = new Purchase
         {
             SupplierId = dto.SupplierId,
             InvoiceNo = dto.InvoiceNo.Trim(),
             BusinessId = targetBusinessId,
-            PurchaseDate = dto.PurchaseDate?.UtcDateTime ?? DateTime.UtcNow,
-            Status = normStatus,
-            AmountPaid = amountPaid,
+            PurchaseDate = purchaseDate,
         };
 
-        SupplierPayment? supplierPayment = null;
-        if ((normStatus == "Paid" || normStatus == "Half-paid") && amountPaid > 0)
+        // Every saved purchase generates a "Purchased" ledger row. Balance snapshots are normalized
+        // after insert via RecalculateSupplierBalancesAsync.
+        var charged = Math.Round(items.Sum(i => i.TotalAmount), 2, MidpointRounding.AwayFromZero);
+        var refNo = await supplierPaymentRepository.GenerateReferenceAsync(targetBusinessId, purchaseDate);
+
+        var supplierPayment = new SupplierPayment
         {
-            supplierPayment = new SupplierPayment
-            {
-                ReferenceNo = string.IsNullOrWhiteSpace(dto.InvoiceNo) ? null : dto.InvoiceNo.Trim(),
-                SupplierId = dto.SupplierId,
-                Amount = amountPaid,
-                Date = purchase.PurchaseDate,
-                BusinessId = targetBusinessId,
-                UserId = userId,
-            };
-        }
+            ReferenceNo = refNo,
+            SupplierId = dto.SupplierId,
+            Description = "Purchased",
+            ChargedAmount = charged,
+            PaidAmount = 0,
+            Balance = 0,
+            Date = purchaseDate,
+            BusinessId = targetBusinessId,
+            UserId = userId,
+        };
 
         try
         {
             var created = await repository.AddWithItemsAsync(purchase, items, supplierPayment);
+            await supplierPaymentRepository.RecalculateSupplierBalancesAsync(targetBusinessId, dto.SupplierId);
             return Ok(created);
         }
         catch (InvalidOperationException ex)
@@ -348,21 +334,12 @@ public class PurchasesController(
             return supErr;
         }
 
-        var normStatus = NormalizePurchaseStatus(dto.Status);
-        var amountPaid = normStatus == "Unpaid"
-            ? 0
-            : (double.TryParse((dto.AmountPaid ?? "0").Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var ap)
-                ? Math.Max(0, ap)
-                : 0);
-
         var purchase = new Purchase
         {
             SupplierId = dto.SupplierId,
             InvoiceNo = dto.InvoiceNo.Trim(),
             BusinessId = targetBusinessId,
             PurchaseDate = dto.PurchaseDate?.UtcDateTime ?? existing.PurchaseDate,
-            Status = normStatus,
-            AmountPaid = amountPaid,
         };
 
         var updated = await repository.UpdateHeaderAsync(id, purchase);

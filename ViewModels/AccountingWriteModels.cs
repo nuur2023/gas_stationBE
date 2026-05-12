@@ -48,7 +48,14 @@ public class MarkAccountingPeriodClosedViewModel
 
 public class CustomerPaymentWriteRequestViewModel
 {
-    public int CustomerFuelGivenId { get; set; }
+    public int CustomerId { get; set; }
+    public string AmountPaid { get; set; } = "0";
+    public DateTimeOffset? PaymentDate { get; set; }
+    public int BusinessId { get; set; }
+}
+
+public class CustomerPaymentUpdateRequestViewModel
+{
     public string AmountPaid { get; set; } = "0";
     public DateTimeOffset? PaymentDate { get; set; }
     public int BusinessId { get; set; }

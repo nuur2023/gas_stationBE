@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using gas_station.Data.Context;
 
@@ -11,9 +12,11 @@ using gas_station.Data.Context;
 namespace gas_station.Migrations
 {
     [DbContext(typeof(GasStationDBContext))]
-    partial class GasStationDBContextModelSnapshot : ModelSnapshot
+    [Migration("20260508095836_SupplierPaymentLedgerAndPurchaseTrim")]
+    partial class SupplierPaymentLedgerAndPurchaseTrim
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -413,7 +416,7 @@ namespace gas_station.Migrations
                     b.ToTable("Currencies");
                 });
 
-            modelBuilder.Entity("gas_station.Models.Customer", b =>
+            modelBuilder.Entity("gas_station.Models.CustomerFuelGiven", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -426,61 +429,6 @@ namespace gas_station.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
-                        .HasDefaultValue("");
-
-                    b.Property<string>("Phone")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .HasDefaultValue("");
-
-                    b.Property<int>("StationId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BusinessId", "StationId");
-
-                    b.HasIndex("BusinessId", "Name", "Phone");
-
-                    b.ToTable("Customers");
-                });
-
-            modelBuilder.Entity("gas_station.Models.CustomerFuelTransaction", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("BusinessId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("CurrencyId")
-                        .HasColumnType("int");
-
-                    b.Property<double>("CashAmount")
-                        .HasColumnType("double");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<int>("CustomerId")
-                        .HasColumnType("int");
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime(6)");
@@ -494,6 +442,14 @@ namespace gas_station.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
                     b.Property<double>("Price")
                         .HasColumnType("double");
 
@@ -503,13 +459,6 @@ namespace gas_station.Migrations
                     b.Property<int>("StationId")
                         .HasColumnType("int");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(16)
-                        .HasColumnType("varchar(16)")
-                        .HasDefaultValue("Fuel");
-
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime(6)");
 
@@ -517,12 +466,6 @@ namespace gas_station.Migrations
                         .HasColumnType("double");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("BusinessId", "Date");
-
-                    b.HasIndex("BusinessId", "CustomerId", "Date");
 
                     b.ToTable("CustomerFuelGivens");
                 });
@@ -538,37 +481,20 @@ namespace gas_station.Migrations
                     b.Property<double>("AmountPaid")
                         .HasColumnType("double");
 
-                    b.Property<double>("Balance")
-                        .HasColumnType("double");
-
                     b.Property<int>("BusinessId")
                         .HasColumnType("int");
-
-                    b.Property<double>("ChargedAmount")
-                        .HasColumnType("double");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<int>("CustomerId")
+                    b.Property<int>("CustomerFuelGivenId")
                         .HasColumnType("int");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(32)
-                        .HasColumnType("varchar(32)")
-                        .HasDefaultValue("Payment");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("tinyint(1)");
 
                     b.Property<DateTime>("PaymentDate")
                         .HasColumnType("datetime(6)");
-
-                    b.Property<string>("ReferenceNo")
-                        .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime(6)");
@@ -577,15 +503,6 @@ namespace gas_station.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("BusinessId", "PaymentDate");
-
-                    b.HasIndex("BusinessId", "CustomerId", "PaymentDate")
-                        .HasDatabaseName("IX_CustomerPayments_Customer_Date");
 
                     b.ToTable("CustomerPayments");
                 });
@@ -668,155 +585,6 @@ namespace gas_station.Migrations
                     b.ToTable("DippingPumps");
                 });
 
-            modelBuilder.Entity("gas_station.Models.Employee", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Address")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(512)
-                        .HasColumnType("varchar(512)")
-                        .HasDefaultValue("");
-
-                    b.Property<double>("BaseSalary")
-                        .HasColumnType("double");
-
-                    b.Property<int>("BusinessId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
-                        .HasDefaultValue("");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
-
-                    b.Property<string>("Phone")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .HasDefaultValue("");
-
-                    b.Property<string>("Position")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .HasDefaultValue("");
-
-                    b.Property<int?>("StationId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StationId");
-
-                    b.HasIndex("BusinessId", "IsDeleted");
-
-                    b.HasIndex("BusinessId", "Name");
-
-                    b.HasIndex("BusinessId", "StationId");
-
-                    b.ToTable("Employees");
-                });
-
-            modelBuilder.Entity("gas_station.Models.EmployeePayment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<double>("Balance")
-                        .HasColumnType("double");
-
-                    b.Property<int>("BusinessId")
-                        .HasColumnType("int");
-
-                    b.Property<double>("ChargedAmount")
-                        .HasColumnType("double");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(32)
-                        .HasColumnType("varchar(32)")
-                        .HasDefaultValue("Payment");
-
-                    b.Property<int>("EmployeeId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<double>("PaidAmount")
-                        .HasColumnType("double");
-
-                    b.Property<DateTime>("PaymentDate")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("PeriodLabel")
-                        .HasMaxLength(16)
-                        .HasColumnType("varchar(16)");
-
-                    b.Property<string>("ReferenceNo")
-                        .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
-
-                    b.Property<int?>("StationId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EmployeeId");
-
-                    b.HasIndex("StationId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("BusinessId", "PaymentDate");
-
-                    b.HasIndex("BusinessId", "PeriodLabel");
-
-                    b.HasIndex("BusinessId", "EmployeeId", "PaymentDate")
-                        .HasDatabaseName("IX_EmployeePayments_Employee_Date");
-
-                    b.ToTable("EmployeePayments");
-                });
-
             modelBuilder.Entity("gas_station.Models.Expense", b =>
                 {
                     b.Property<int>("Id")
@@ -834,8 +602,9 @@ namespace gas_station.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<int>("CurrencyId")
-                        .HasColumnType("int");
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime(6)");
@@ -857,7 +626,7 @@ namespace gas_station.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.Property<int?>("StationId")
+                    b.Property<int>("StationId")
                         .HasColumnType("int");
 
                     b.Property<string>("Type")
@@ -2107,80 +1876,6 @@ namespace gas_station.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("gas_station.Models.CustomerFuelTransaction", b =>
-                {
-                    b.HasOne("gas_station.Models.Customer", "Customer")
-                        .WithMany("FuelTransactions")
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Customer");
-                });
-
-            modelBuilder.Entity("gas_station.Models.CustomerPayment", b =>
-                {
-                    b.HasOne("gas_station.Models.Business", null)
-                        .WithMany()
-                        .HasForeignKey("BusinessId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("gas_station.Models.Customer", "Customer")
-                        .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("gas_station.Models.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Customer");
-                });
-
-            modelBuilder.Entity("gas_station.Models.Employee", b =>
-                {
-                    b.HasOne("gas_station.Models.Business", null)
-                        .WithMany()
-                        .HasForeignKey("BusinessId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("gas_station.Models.Station", null)
-                        .WithMany()
-                        .HasForeignKey("StationId")
-                        .OnDelete(DeleteBehavior.Restrict);
-                });
-
-            modelBuilder.Entity("gas_station.Models.EmployeePayment", b =>
-                {
-                    b.HasOne("gas_station.Models.Business", null)
-                        .WithMany()
-                        .HasForeignKey("BusinessId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("gas_station.Models.Employee", null)
-                        .WithMany()
-                        .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("gas_station.Models.Station", null)
-                        .WithMany()
-                        .HasForeignKey("StationId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("gas_station.Models.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("gas_station.Models.FuelPrice", b =>
                 {
                     b.HasOne("gas_station.Models.Currency", "Currency")
@@ -2236,7 +1931,7 @@ namespace gas_station.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("gas_station.Models.CustomerFuelTransaction", "Customer")
+                    b.HasOne("gas_station.Models.CustomerFuelGiven", "Customer")
                         .WithMany("JournalEntryLines")
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -2446,12 +2141,7 @@ namespace gas_station.Migrations
                     b.Navigation("FuelPrices");
                 });
 
-            modelBuilder.Entity("gas_station.Models.Customer", b =>
-                {
-                    b.Navigation("FuelTransactions");
-                });
-
-            modelBuilder.Entity("gas_station.Models.CustomerFuelTransaction", b =>
+            modelBuilder.Entity("gas_station.Models.CustomerFuelGiven", b =>
                 {
                     b.Navigation("JournalEntryLines");
                 });

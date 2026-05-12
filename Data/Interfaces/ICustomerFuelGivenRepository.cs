@@ -3,10 +3,10 @@ using gas_station.Models;
 
 namespace gas_station.Data.Interfaces;
 
-public interface ICustomerFuelGivenRepository : IGasStationInterface<CustomerFuelGiven>
+public interface ICustomerFuelGivenRepository : IGasStationInterface<CustomerFuelTransaction>
 {
-    Task<List<CustomerFuelGiven>> GetAllAsync();
-    Task<CustomerFuelGiven?> GetByIdAsync(int id);
-    Task<PagedResult<CustomerFuelGiven>> GetPagedAsync(int page, int pageSize, string? search, int? businessId, int? stationId = null);
+    Task<List<CustomerFuelTransaction>> GetAllAsync();
+    Task<CustomerFuelTransaction?> GetByIdAsync(int id);
+    Task<PagedResult<CustomerFuelTransaction>> GetPagedAsync(int page, int pageSize, string? search, int? businessId, int? stationId = null);
 }
 

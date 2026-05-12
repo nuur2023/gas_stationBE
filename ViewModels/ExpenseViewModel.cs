@@ -7,7 +7,7 @@ public class ExpenseViewModel
     public string SideAction { get; set; } = "Operation";
     public DateTime Date { get; set; }
     public string Description { get; set; } = "";
-    public string CurrencyCode { get; set; } = "USD";
+    public int CurrencyId { get; set; }
     public double LocalAmount { get; set; }
     public double Rate { get; set; }
     public double AmountUsd { get; set; }

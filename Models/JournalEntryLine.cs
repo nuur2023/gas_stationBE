@@ -16,10 +16,10 @@ public class JournalEntryLine : BaseModel
     public double Credit { get; set; }
     public string? Remark { get; set; }
 
-    /// <summary>Subledger: links line to a customer credit record (CustomerFuelGivens) when account is AR.</summary>
+    /// <summary>Subledger: links line to a customer fuel transaction when account is AR.</summary>
     public int? CustomerId { get; set; }
     [ValidateNever]
-    public CustomerFuelGiven? Customer { get; set; }
+    public CustomerFuelTransaction? Customer { get; set; }
 
     /// <summary>Subledger: links line to a supplier when account is AP.</summary>
     public int? SupplierId { get; set; }

@@ -235,6 +235,8 @@ builder.Services.AddScoped<ICustomerFuelGivenRepository, CustomerFuelGivenReposi
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IJournalEntryRepository, JournalEntryRepository>();
 builder.Services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
+builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
+builder.Services.AddScoped<IEmployeePaymentRepository, EmployeePaymentRepository>();
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IBusinessFuelInventoryLedgerRepository, BusinessFuelInventoryLedgerRepository>();
 builder.Services.AddScoped<INotificationsRepository, NotificationsRepository>();

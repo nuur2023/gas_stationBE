@@ -23,8 +23,6 @@ public class PurchaseWriteRequestViewModel
     public string InvoiceNo { get; set; } = "";
     public int BusinessId { get; set; }
     public DateTimeOffset? PurchaseDate { get; set; }
-    public string Status { get; set; } = "Unpaid";
-    public string AmountPaid { get; set; } = "0";
     /// <summary>Optional on create; line items are managed via purchase detail.</summary>
     public List<PurchaseItemWriteRequestViewModel>? Items { get; set; }
 }
@@ -36,8 +34,6 @@ public class PurchaseHeaderWriteRequestViewModel
     public string InvoiceNo { get; set; } = "";
     public int BusinessId { get; set; }
     public DateTimeOffset? PurchaseDate { get; set; }
-    public string Status { get; set; } = "Unpaid";
-    public string AmountPaid { get; set; } = "0";
 }
 
 /// <summary>API shape: purchase header plus line items.</summary>
@@ -48,8 +44,6 @@ public class PurchaseDetailResponse
     public string InvoiceNo { get; set; } = "";
     public int BusinessId { get; set; }
     public DateTime PurchaseDate { get; set; }
-    public string Status { get; set; } = "Unpaid";
-    public double AmountPaid { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public List<PurchaseItemResponse> Items { get; set; } = [];

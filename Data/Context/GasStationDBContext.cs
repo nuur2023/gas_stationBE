@@ -34,7 +34,8 @@ public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) 
     public DbSet<PurchaseItem> PurchaseItems => Set<PurchaseItem>();
     public DbSet<Currency> Currencies => Set<Currency>();
     public DbSet<FuelPrice> FuelPrices => Set<FuelPrice>();
-    public DbSet<CustomerFuelGiven> CustomerFuelGivens => Set<CustomerFuelGiven>();
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<CustomerFuelTransaction> CustomerFuelGivens => Set<CustomerFuelTransaction>();
     public DbSet<ChartsOfAccounts> ChartsOfAccounts => Set<ChartsOfAccounts>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
@@ -45,6 +46,8 @@ public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) 
     public DbSet<TransferInventory> TransferInventories => Set<TransferInventory>();
     public DbSet<TransferInventoryAudit> TransferInventoryAudits => Set<TransferInventoryAudit>();
     public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
+    public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<EmployeePayment> EmployeePayments => Set<EmployeePayment>();
     public DbSet<AccountingPeriod> AccountingPeriods => Set<AccountingPeriod>();
     public DbSet<RecurringJournalEntry> RecurringJournalEntries => Set<RecurringJournalEntry>();
     public DbSet<AppNotification> AppNotifications => Set<AppNotification>();
@@ -184,6 +187,50 @@ public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) 
             e.HasIndex(x => new { x.BusinessId, x.ChangedAt });
         });
 
+        modelBuilder.Entity<CustomerFuelTransaction>(e =>
+        {
+            e.Property(x => x.Type).HasMaxLength(16).HasDefaultValue("Fuel");
+            e.HasIndex(x => new { x.BusinessId, x.Date });
+            e.HasOne(x => x.Customer)
+                .WithMany(c => c.FuelTransactions)
+                .HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.BusinessId, x.CustomerId, x.Date });
+        });
+
+        modelBuilder.Entity<Customer>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(256).HasDefaultValue(string.Empty);
+            e.Property(x => x.Phone).HasMaxLength(64).HasDefaultValue(string.Empty);
+            e.HasIndex(x => new { x.BusinessId, x.StationId });
+            e.HasIndex(x => new { x.BusinessId, x.Name, x.Phone });
+        });
+
+        modelBuilder.Entity<CustomerPayment>(e =>
+        {
+            e.HasOne(x => x.Customer)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<Business>()
+                .WithMany()
+                .HasForeignKey(x => x.BusinessId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.Property(x => x.ReferenceNo).HasMaxLength(256);
+            e.Property(x => x.Description).HasMaxLength(32).HasDefaultValue("Payment");
+            e.HasIndex(x => new { x.BusinessId, x.PaymentDate });
+            e.HasIndex(x => new { x.BusinessId, x.CustomerId, x.PaymentDate })
+                .HasDatabaseName("IX_CustomerPayments_Customer_Date");
+            e.HasIndex(x => x.CustomerId);
+        });
+
         modelBuilder.Entity<SupplierPayment>(e =>
         {
             e.HasOne<Supplier>()
@@ -201,8 +248,16 @@ public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) 
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            e.HasOne<Purchase>()
+                .WithMany()
+                .HasForeignKey(x => x.PurchaseId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             e.Property(x => x.ReferenceNo).HasMaxLength(256);
+            e.Property(x => x.Description).HasMaxLength(32).HasDefaultValue("Payment");
             e.HasIndex(x => new { x.BusinessId, x.Date });
+            e.HasIndex(x => new { x.BusinessId, x.SupplierId, x.Date });
+            e.HasIndex(x => x.PurchaseId);
         });
 
         modelBuilder.Entity<AccountingPeriod>(e =>
@@ -214,6 +269,59 @@ public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) 
 
             e.Property(x => x.Name).HasMaxLength(256);
             e.HasIndex(x => new { x.BusinessId, x.PeriodStart, x.PeriodEnd });
+        });
+
+        modelBuilder.Entity<Employee>(e =>
+        {
+            e.HasOne<Business>()
+                .WithMany()
+                .HasForeignKey(x => x.BusinessId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<Station>()
+                .WithMany()
+                .HasForeignKey(x => x.StationId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.Property(x => x.Name).HasMaxLength(256);
+            e.Property(x => x.Phone).HasMaxLength(64).HasDefaultValue(string.Empty);
+            e.Property(x => x.Email).HasMaxLength(256).HasDefaultValue(string.Empty);
+            e.Property(x => x.Address).HasMaxLength(512).HasDefaultValue(string.Empty);
+            e.Property(x => x.Position).HasMaxLength(128).HasDefaultValue(string.Empty);
+            e.HasIndex(x => new { x.BusinessId, x.IsDeleted });
+            e.HasIndex(x => new { x.BusinessId, x.StationId });
+            e.HasIndex(x => new { x.BusinessId, x.Name });
+        });
+
+        modelBuilder.Entity<EmployeePayment>(e =>
+        {
+            e.HasOne<Employee>()
+                .WithMany()
+                .HasForeignKey(x => x.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<Business>()
+                .WithMany()
+                .HasForeignKey(x => x.BusinessId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne<Station>()
+                .WithMany()
+                .HasForeignKey(x => x.StationId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.Property(x => x.ReferenceNo).HasMaxLength(256);
+            e.Property(x => x.Description).HasMaxLength(32).HasDefaultValue("Payment");
+            e.Property(x => x.PeriodLabel).HasMaxLength(16);
+            e.HasIndex(x => new { x.BusinessId, x.PaymentDate });
+            e.HasIndex(x => new { x.BusinessId, x.EmployeeId, x.PaymentDate })
+                .HasDatabaseName("IX_EmployeePayments_Employee_Date");
+            e.HasIndex(x => new { x.BusinessId, x.PeriodLabel });
         });
 
         modelBuilder.Entity<RecurringJournalEntry>(e =>
