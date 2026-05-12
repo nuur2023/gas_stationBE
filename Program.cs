@@ -287,11 +287,9 @@ app.MapControllers();
 // -------------------- PORT + START (before migrate — health checks) --------------------
 // DigitalOcean App Platform probes $PORT while the app is starting. If Migrate/Seed run before
 // the server listens, the probe fails repeatedly and the platform terminates the container.
-var portValue = Environment.GetEnvironmentVariable("PORT");
-var port = int.TryParse(portValue, out var parsedPort) ? parsedPort : 8080;
-app.Urls.Clear();
-app.Urls.Add($"http://0.0.0.0:{port}");
-
+// Do not call app.Urls.Clear(): the Heroku/DO buildpack starts the app with
+//   ./gas_station --urls http://*:$PORT
+// Clearing Urls would drop that binding. Start the host first, then migrate.
 await app.StartAsync();
 
 try
