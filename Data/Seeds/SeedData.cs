@@ -64,6 +64,11 @@ public static class SeedData
         var now = DateTime.UtcNow;
         var defaultTypes = new[] { "Asset", "Liability", "Equity", "Income", "Expense", "COGS", "Temporary Account" };
         var anyAdded = false;
+        // if the charts of accounts already exist, don't add them
+        if (await context.ChartsOfAccounts.AnyAsync())
+        {
+            return;
+        }
 
         foreach (var t in defaultTypes)
         {
@@ -87,6 +92,12 @@ public static class SeedData
     /// </summary>
     private static async Task EnsureDefaultCurrenciesAsync(GasStationDBContext context)
     {
+        // check if the currencies already exist
+        if (await context.Currencies.AnyAsync())
+        {
+            return;
+        }
+
         var codes = await context.Currencies
             .AsNoTracking()
             .Where(x => !x.IsDeleted)
