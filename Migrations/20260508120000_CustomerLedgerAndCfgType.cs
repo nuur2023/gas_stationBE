@@ -7,105 +7,68 @@ namespace gas_station.Migrations
     /// <inheritdoc />
     public partial class CustomerLedgerAndCfgType : Migration
     {
-        /// <summary>
-        /// Adds Type / CashAmount to CustomerFuelGivens and extends CustomerPayments into a
-        /// supplier-style ledger (Charged / Payment description, ChargedAmount, Balance,
-        /// ReferenceNo, denormalised CustomerName + CustomerPhone, optional CustomerFuelGivenId).
-        /// Idempotent SQL so a partially-applied retry is safe.
-        /// </summary>
+        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // CustomerFuelGivens — Type + CashAmount + index.
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerFuelGivens` ADD COLUMN IF NOT EXISTS `Type` VARCHAR(16) "
-                    + "CHARACTER SET utf8mb4 NOT NULL DEFAULT 'Fuel';"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerFuelGivens` ADD COLUMN IF NOT EXISTS `CashAmount` DOUBLE NOT NULL DEFAULT 0;"
-            );
-            migrationBuilder.Sql(
-                "CREATE INDEX IF NOT EXISTS `IX_CustomerFuelGivens_BusinessId_Date` "
-                    + "ON `CustomerFuelGivens` (`BusinessId`, `Date`);"
-            );
+            MigrationMySqlCompat.AddColumnIfNotExists(migrationBuilder, "CustomerFuelGivens", "Type",
+                "ALTER TABLE `CustomerFuelGivens` ADD COLUMN `Type` VARCHAR(16) "
+                + "CHARACTER SET utf8mb4 NOT NULL DEFAULT 'Fuel'");
+            MigrationMySqlCompat.AddColumnIfNotExists(migrationBuilder, "CustomerFuelGivens", "CashAmount",
+                "ALTER TABLE `CustomerFuelGivens` ADD COLUMN `CashAmount` DOUBLE NOT NULL DEFAULT 0");
+            MigrationMySqlCompat.CreateIndexIfNotExists(migrationBuilder, "CustomerFuelGivens", "IX_CustomerFuelGivens_BusinessId_Date",
+                "CREATE INDEX `IX_CustomerFuelGivens_BusinessId_Date` "
+                + "ON `CustomerFuelGivens` (`BusinessId`, `Date`)");
 
-            // CustomerPayments — extend into ledger.
             migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` MODIFY COLUMN `CustomerFuelGivenId` INT NULL;"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` ADD COLUMN IF NOT EXISTS `ChargedAmount` DOUBLE NOT NULL DEFAULT 0;"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` ADD COLUMN IF NOT EXISTS `Balance` DOUBLE NOT NULL DEFAULT 0;"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` ADD COLUMN IF NOT EXISTS `Description` VARCHAR(32) "
-                    + "CHARACTER SET utf8mb4 NOT NULL DEFAULT 'Payment';"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` ADD COLUMN IF NOT EXISTS `ReferenceNo` VARCHAR(256) "
-                    + "CHARACTER SET utf8mb4 NULL;"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` ADD COLUMN IF NOT EXISTS `CustomerName` VARCHAR(256) "
-                    + "CHARACTER SET utf8mb4 NOT NULL DEFAULT '';"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` ADD COLUMN IF NOT EXISTS `CustomerPhone` VARCHAR(64) "
-                    + "CHARACTER SET utf8mb4 NOT NULL DEFAULT '';"
-            );
+                "ALTER TABLE `CustomerPayments` MODIFY COLUMN `CustomerFuelGivenId` INT NULL;");
 
-            // Indexes.
-            migrationBuilder.Sql(
-                "CREATE INDEX IF NOT EXISTS `IX_CustomerPayments_CustomerFuelGivenId` "
-                    + "ON `CustomerPayments` (`CustomerFuelGivenId`);"
-            );
-            migrationBuilder.Sql(
-                "CREATE INDEX IF NOT EXISTS `IX_CustomerPayments_UserId` "
-                    + "ON `CustomerPayments` (`UserId`);"
-            );
-            migrationBuilder.Sql(
-                "CREATE INDEX IF NOT EXISTS `IX_CustomerPayments_BusinessId_PaymentDate` "
-                    + "ON `CustomerPayments` (`BusinessId`, `PaymentDate`);"
-            );
-            migrationBuilder.Sql(
-                "CREATE INDEX IF NOT EXISTS "
-                    + "`IX_CustomerPayments_Customer_Date` "
-                    + "ON `CustomerPayments` (`BusinessId`, `CustomerName`, `CustomerPhone`, `PaymentDate`);"
-            );
+            MigrationMySqlCompat.AddColumnIfNotExists(migrationBuilder, "CustomerPayments", "ChargedAmount",
+                "ALTER TABLE `CustomerPayments` ADD COLUMN `ChargedAmount` DOUBLE NOT NULL DEFAULT 0");
+            MigrationMySqlCompat.AddColumnIfNotExists(migrationBuilder, "CustomerPayments", "Balance",
+                "ALTER TABLE `CustomerPayments` ADD COLUMN `Balance` DOUBLE NOT NULL DEFAULT 0");
+            MigrationMySqlCompat.AddColumnIfNotExists(migrationBuilder, "CustomerPayments", "Description",
+                "ALTER TABLE `CustomerPayments` ADD COLUMN `Description` VARCHAR(32) "
+                + "CHARACTER SET utf8mb4 NOT NULL DEFAULT 'Payment'");
+            MigrationMySqlCompat.AddColumnIfNotExists(migrationBuilder, "CustomerPayments", "ReferenceNo",
+                "ALTER TABLE `CustomerPayments` ADD COLUMN `ReferenceNo` VARCHAR(256) "
+                + "CHARACTER SET utf8mb4 NULL");
+            MigrationMySqlCompat.AddColumnIfNotExists(migrationBuilder, "CustomerPayments", "CustomerName",
+                "ALTER TABLE `CustomerPayments` ADD COLUMN `CustomerName` VARCHAR(256) "
+                + "CHARACTER SET utf8mb4 NOT NULL DEFAULT ''");
+            MigrationMySqlCompat.AddColumnIfNotExists(migrationBuilder, "CustomerPayments", "CustomerPhone",
+                "ALTER TABLE `CustomerPayments` ADD COLUMN `CustomerPhone` VARCHAR(64) "
+                + "CHARACTER SET utf8mb4 NOT NULL DEFAULT ''");
 
-            // Foreign keys (drop-then-add so MariaDB without "ADD CONSTRAINT IF NOT EXISTS" works).
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` "
-                    + "DROP FOREIGN KEY IF EXISTS `FK_CustomerPayments_Businesses_BusinessId`;"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` "
-                    + "ADD CONSTRAINT `FK_CustomerPayments_Businesses_BusinessId` "
-                    + "FOREIGN KEY (`BusinessId`) REFERENCES `Businesses` (`Id`) ON DELETE RESTRICT;"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` "
-                    + "DROP FOREIGN KEY IF EXISTS `FK_CustomerPayments_CustomerFuelGivens_CustomerFuelGivenId`;"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` "
-                    + "ADD CONSTRAINT `FK_CustomerPayments_CustomerFuelGivens_CustomerFuelGivenId` "
-                    + "FOREIGN KEY (`CustomerFuelGivenId`) REFERENCES `CustomerFuelGivens` (`Id`) ON DELETE RESTRICT;"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` "
-                    + "DROP FOREIGN KEY IF EXISTS `FK_CustomerPayments_Users_UserId`;"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` "
-                    + "ADD CONSTRAINT `FK_CustomerPayments_Users_UserId` "
-                    + "FOREIGN KEY (`UserId`) REFERENCES `Users` (`Id`) ON DELETE RESTRICT;"
-            );
+            MigrationMySqlCompat.CreateIndexIfNotExists(migrationBuilder, "CustomerPayments", "IX_CustomerPayments_CustomerFuelGivenId",
+                "CREATE INDEX `IX_CustomerPayments_CustomerFuelGivenId` "
+                + "ON `CustomerPayments` (`CustomerFuelGivenId`)");
+            MigrationMySqlCompat.CreateIndexIfNotExists(migrationBuilder, "CustomerPayments", "IX_CustomerPayments_UserId",
+                "CREATE INDEX `IX_CustomerPayments_UserId` ON `CustomerPayments` (`UserId`)");
+            MigrationMySqlCompat.CreateIndexIfNotExists(migrationBuilder, "CustomerPayments", "IX_CustomerPayments_BusinessId_PaymentDate",
+                "CREATE INDEX `IX_CustomerPayments_BusinessId_PaymentDate` "
+                + "ON `CustomerPayments` (`BusinessId`, `PaymentDate`)");
+            MigrationMySqlCompat.CreateIndexIfNotExists(migrationBuilder, "CustomerPayments", "IX_CustomerPayments_Customer_Date",
+                "CREATE INDEX `IX_CustomerPayments_Customer_Date` "
+                + "ON `CustomerPayments` (`BusinessId`, `CustomerName`, `CustomerPhone`, `PaymentDate`)");
 
-            // Backfill: any existing AmountPaid > 0 rows are real payments. Fill Description, names
-            // from the linked CustomerFuelGiven, and recompute Balance (best effort: per-customer
-            // chronological running balance is recalculated on the next save in code as well).
+            MigrationMySqlCompat.DropForeignKeyIfExists(migrationBuilder, "CustomerPayments", "FK_CustomerPayments_Businesses_BusinessId");
+            MigrationMySqlCompat.AddForeignKeyIfNotExists(migrationBuilder, "CustomerPayments", "FK_CustomerPayments_Businesses_BusinessId",
+                "ALTER TABLE `CustomerPayments` "
+                + "ADD CONSTRAINT `FK_CustomerPayments_Businesses_BusinessId` "
+                + "FOREIGN KEY (`BusinessId`) REFERENCES `Businesses` (`Id`) ON DELETE RESTRICT");
+
+            MigrationMySqlCompat.DropForeignKeyIfExists(migrationBuilder, "CustomerPayments", "FK_CustomerPayments_CustomerFuelGivens_CustomerFuelGivenId");
+            MigrationMySqlCompat.AddForeignKeyIfNotExists(migrationBuilder, "CustomerPayments", "FK_CustomerPayments_CustomerFuelGivens_CustomerFuelGivenId",
+                "ALTER TABLE `CustomerPayments` "
+                + "ADD CONSTRAINT `FK_CustomerPayments_CustomerFuelGivens_CustomerFuelGivenId` "
+                + "FOREIGN KEY (`CustomerFuelGivenId`) REFERENCES `CustomerFuelGivens` (`Id`) ON DELETE RESTRICT");
+
+            MigrationMySqlCompat.DropForeignKeyIfExists(migrationBuilder, "CustomerPayments", "FK_CustomerPayments_Users_UserId");
+            MigrationMySqlCompat.AddForeignKeyIfNotExists(migrationBuilder, "CustomerPayments", "FK_CustomerPayments_Users_UserId",
+                "ALTER TABLE `CustomerPayments` "
+                + "ADD CONSTRAINT `FK_CustomerPayments_Users_UserId` "
+                + "FOREIGN KEY (`UserId`) REFERENCES `Users` (`Id`) ON DELETE RESTRICT");
+
             migrationBuilder.Sql(@"
                 UPDATE `CustomerPayments` cp
                 JOIN `CustomerFuelGivens` cfg ON cfg.`Id` = cp.`CustomerFuelGivenId`
@@ -119,44 +82,36 @@ namespace gas_station.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` DROP FOREIGN KEY IF EXISTS `FK_CustomerPayments_Businesses_BusinessId`;"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` DROP FOREIGN KEY IF EXISTS `FK_CustomerPayments_CustomerFuelGivens_CustomerFuelGivenId`;"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` DROP FOREIGN KEY IF EXISTS `FK_CustomerPayments_Users_UserId`;"
-            );
+            MigrationMySqlCompat.DropForeignKeyIfExists(migrationBuilder, "CustomerPayments", "FK_CustomerPayments_Businesses_BusinessId");
+            MigrationMySqlCompat.DropForeignKeyIfExists(migrationBuilder, "CustomerPayments", "FK_CustomerPayments_CustomerFuelGivens_CustomerFuelGivenId");
+            MigrationMySqlCompat.DropForeignKeyIfExists(migrationBuilder, "CustomerPayments", "FK_CustomerPayments_Users_UserId");
+
+            MigrationMySqlCompat.DropIndexIfExists(migrationBuilder, "CustomerPayments", "IX_CustomerPayments_Customer_Date");
+            MigrationMySqlCompat.DropIndexIfExists(migrationBuilder, "CustomerPayments", "IX_CustomerPayments_BusinessId_PaymentDate");
+            MigrationMySqlCompat.DropIndexIfExists(migrationBuilder, "CustomerPayments", "IX_CustomerPayments_UserId");
+            MigrationMySqlCompat.DropIndexIfExists(migrationBuilder, "CustomerPayments", "IX_CustomerPayments_CustomerFuelGivenId");
+
+            MigrationMySqlCompat.RunIfColumnExists(migrationBuilder, "CustomerPayments", "CustomerPhone",
+                "ALTER TABLE `CustomerPayments` DROP COLUMN `CustomerPhone`");
+            MigrationMySqlCompat.RunIfColumnExists(migrationBuilder, "CustomerPayments", "CustomerName",
+                "ALTER TABLE `CustomerPayments` DROP COLUMN `CustomerName`");
+            MigrationMySqlCompat.RunIfColumnExists(migrationBuilder, "CustomerPayments", "ReferenceNo",
+                "ALTER TABLE `CustomerPayments` DROP COLUMN `ReferenceNo`");
+            MigrationMySqlCompat.RunIfColumnExists(migrationBuilder, "CustomerPayments", "Description",
+                "ALTER TABLE `CustomerPayments` DROP COLUMN `Description`");
+            MigrationMySqlCompat.RunIfColumnExists(migrationBuilder, "CustomerPayments", "Balance",
+                "ALTER TABLE `CustomerPayments` DROP COLUMN `Balance`");
+            MigrationMySqlCompat.RunIfColumnExists(migrationBuilder, "CustomerPayments", "ChargedAmount",
+                "ALTER TABLE `CustomerPayments` DROP COLUMN `ChargedAmount`");
 
             migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` DROP INDEX IF EXISTS `IX_CustomerPayments_Customer_Date`;"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` DROP INDEX IF EXISTS `IX_CustomerPayments_BusinessId_PaymentDate`;"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` DROP INDEX IF EXISTS `IX_CustomerPayments_UserId`;"
-            );
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` DROP INDEX IF EXISTS `IX_CustomerPayments_CustomerFuelGivenId`;"
-            );
+                "ALTER TABLE `CustomerPayments` MODIFY COLUMN `CustomerFuelGivenId` INT NOT NULL;");
 
-            migrationBuilder.Sql("ALTER TABLE `CustomerPayments` DROP COLUMN IF EXISTS `CustomerPhone`;");
-            migrationBuilder.Sql("ALTER TABLE `CustomerPayments` DROP COLUMN IF EXISTS `CustomerName`;");
-            migrationBuilder.Sql("ALTER TABLE `CustomerPayments` DROP COLUMN IF EXISTS `ReferenceNo`;");
-            migrationBuilder.Sql("ALTER TABLE `CustomerPayments` DROP COLUMN IF EXISTS `Description`;");
-            migrationBuilder.Sql("ALTER TABLE `CustomerPayments` DROP COLUMN IF EXISTS `Balance`;");
-            migrationBuilder.Sql("ALTER TABLE `CustomerPayments` DROP COLUMN IF EXISTS `ChargedAmount`;");
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerPayments` MODIFY COLUMN `CustomerFuelGivenId` INT NOT NULL;"
-            );
-
-            migrationBuilder.Sql(
-                "ALTER TABLE `CustomerFuelGivens` DROP INDEX IF EXISTS `IX_CustomerFuelGivens_BusinessId_Date`;"
-            );
-            migrationBuilder.Sql("ALTER TABLE `CustomerFuelGivens` DROP COLUMN IF EXISTS `CashAmount`;");
-            migrationBuilder.Sql("ALTER TABLE `CustomerFuelGivens` DROP COLUMN IF EXISTS `Type`;");
+            MigrationMySqlCompat.DropIndexIfExists(migrationBuilder, "CustomerFuelGivens", "IX_CustomerFuelGivens_BusinessId_Date");
+            MigrationMySqlCompat.RunIfColumnExists(migrationBuilder, "CustomerFuelGivens", "CashAmount",
+                "ALTER TABLE `CustomerFuelGivens` DROP COLUMN `CashAmount`");
+            MigrationMySqlCompat.RunIfColumnExists(migrationBuilder, "CustomerFuelGivens", "Type",
+                "ALTER TABLE `CustomerFuelGivens` DROP COLUMN `Type`");
         }
     }
 }
