@@ -14,9 +14,8 @@ public class Account : BaseModel
     public ChartsOfAccounts ChartsOfAccounts { get; set; } = null!;
 
     /// <summary>
-    /// When <see cref="BusinessId"/> is set and this is null, the row is a business-only staging / temporary
-    /// top-level account (not a structural child of the shared chart). It can still receive journal lines;
-    /// UI rollups should not treat it as part of normal parent totals.
+    /// Parent in the chart hierarchy; null means a top-level parent for this business (or global when <see cref="BusinessId"/> is null).
+    /// Clearing / staging lines belong under the Temporary chart (e.g. as children of Temporary Account), not as orphan top-level rows.
     /// </summary>
     public int? ParentAccountId { get; set; }
     [ValidateNever]

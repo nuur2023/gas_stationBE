@@ -19,6 +19,15 @@ public class AuthController(IAuthRepository authRepository) : ControllerBase
             return Unauthorized("Invalid email, phone, or password.");
         }
 
+        if (result.BusinessInactive)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                code = "business_inactive",
+                message = "This business is inactive. You cannot sign in.",
+            });
+        }
+
         return Ok(result);
     }
 }

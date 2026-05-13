@@ -39,6 +39,15 @@ public class PermissionsController(
         "/setup/business-users",
     };
 
+    /// <summary>Pool / transfer UI routes — hidden when the business does not support pooling.</summary>
+    private static readonly HashSet<string> BusinessPoolSubmenuPaths = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "/fuel-inventory",
+        "/transfers",
+        "/transfer-audit-trail",
+        "/fuel-inventory/transfers",
+    };
+
     private static bool IsSuperAdmin(ClaimsPrincipal user) => user.IsInRole(SuperAdminRole);
 
     private static bool BypassNavPermissions(ClaimsPrincipal user) =>
@@ -123,13 +132,17 @@ public class PermissionsController(
     public async Task<IActionResult> GetMyPermissions()
     {
         if (BypassNavPermissions(User))
-            return Ok(new PermissionMeResponseViewModel { FullAccess = true, Items = [] });
+            return Ok(new PermissionMeResponseViewModel { FullAccess = true, SupportsPool = true, Items = [] });
 
         if (!TryGetJwtUserId(out var uid, out var uerr))
             return uerr!;
 
         if (!TryGetJwtBusiness(out var bid) || bid <= 0)
-            return Ok(new PermissionMeResponseViewModel { FullAccess = false, Items = [] });
+            return Ok(new PermissionMeResponseViewModel { FullAccess = false, SupportsPool = true, Items = [] });
+
+        var biz = await db.Businesses.AsNoTracking()
+            .FirstOrDefaultAsync(b => b.Id == bid && !b.IsDeleted);
+        var supportsPool = biz?.IsSupportPool ?? true;
 
         var rows = await db.Permissions.AsNoTracking()
             .Where(p => !p.IsDeleted && p.UserId == uid && p.BusinessId == bid)
@@ -155,6 +168,7 @@ public class PermissionsController(
                 };
             })
             .Where(x => x.Route.Length > 0)
+            .Where(x => supportsPool || !BusinessPoolSubmenuPaths.Contains(RoutePathOnly(x.Route)))
             .ToList();
 
         var items = flat
@@ -169,7 +183,7 @@ public class PermissionsController(
             })
             .ToList();
 
-        return Ok(new PermissionMeResponseViewModel { FullAccess = false, Items = items });
+        return Ok(new PermissionMeResponseViewModel { FullAccess = false, SupportsPool = supportsPool, Items = items });
     }
 
     private static string RoutePathOnly(string? route)
@@ -276,6 +290,11 @@ public class PermissionsController(
                 return requested;
             })
             .ToList();
+
+        var targetBiz = await db.Businesses.AsNoTracking()
+            .FirstOrDefaultAsync(b => b.Id == dto.BusinessId && !b.IsDeleted);
+        if (targetBiz is { IsSupportPool: false })
+            list = await RemoveSubmenusByBlockedRoutesAsync(list, BusinessPoolSubmenuPaths);
 
         if (IsSuperAdmin(User) && await TargetUserIsAdminAsync(dto.UserId))
             list = await RemoveSubmenusByBlockedRoutesAsync(list, AdminGrantBlockedSubmenuPaths);

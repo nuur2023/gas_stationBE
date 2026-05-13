@@ -10,4 +10,10 @@ public class AuthResponseViewModel
     public DateTime ExpiresAtUtc { get; set; }
     public int? BusinessId { get; set; }
     public int? StationId { get; set; }
+
+    /// <summary>True when login failed because the linked business is inactive (non–SuperAdmin).</summary>
+    public bool BusinessInactive { get; set; }
+
+    /// <summary>Fuel pool / transfer features are available for the signed-in business.</summary>
+    public bool IsSupportPool { get; set; } = true;
 }

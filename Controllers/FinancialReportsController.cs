@@ -5,6 +5,7 @@ using gas_station.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using gas_station.Reporting;
 
 namespace gas_station.Controllers;
 
@@ -20,7 +21,6 @@ internal sealed record ReportJournalLineRow(
     double Debit,
     double Credit,
     string? Remark,
-    /// <summary>When set with no parent, account is business staging (temporary) — excluded from balance sheet math.</summary>
     int? AccountBusinessId,
     int? AccountParentAccountId);
 
@@ -146,10 +146,6 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
             ? "unadjusted"
             : "adjusted";
 
-    /// <summary>Business-scoped top-level staging account (not linked under chart parent). Omit from balance sheet totals/lines.</summary>
-    private static bool IsTemporaryBusinessStagingAccount(int? accountBusinessId, int? accountParentAccountId) =>
-        accountBusinessId is > 0 && (accountParentAccountId is null or 0);
-
     [HttpGet("trial-balance")]
     public IActionResult TrialBalance(
         [FromQuery] int businessId,
@@ -162,7 +158,7 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
         var stationFilter = ResolveStationFilterForReports(stationId);
         var rows = FilterLines(bid, from, to, stationFilter, trialBalanceMode)
             .AsEnumerable()
-            .Where(x => !IsTemporaryBusinessStagingAccount(x.AccountBusinessId, x.AccountParentAccountId))
+            .Where(x => !AccountingDashboardFinance.IsTemporaryChartAccount(x.AccountType))
             .GroupBy(x => new { x.AccountId, x.AccountCode, x.AccountName })
             .Select(g => new
             {
@@ -193,7 +189,7 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
         var stationFilter = ResolveStationFilterForReports(stationId);
         var rows = FilterLines(bid, null, to, stationFilter, trialBalanceMode)
             .AsEnumerable()
-            .Where(x => !IsTemporaryBusinessStagingAccount(x.AccountBusinessId, x.AccountParentAccountId))
+            .Where(x => !AccountingDashboardFinance.IsTemporaryChartAccount(x.AccountType))
             .GroupBy(x => new { x.AccountId, x.AccountCode, x.AccountName, x.AccountType })
             .Select(g =>
             {
@@ -881,7 +877,7 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
     {
         var raw = FilterLines(businessId, from, to, stationId, IncomeStatementTrialBalanceMode(trialBalanceMode))
             .AsEnumerable()
-            .Where(x => !IsTemporaryBusinessStagingAccount(x.AccountBusinessId, x.AccountParentAccountId))
+            .Where(x => !AccountingDashboardFinance.IsTemporaryChartAccount(x.AccountType))
             .ToList();
 
         var byAccount = raw
@@ -940,7 +936,7 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
     {
         var allLines = FilterLines(businessId, null, to, stationId, StatementReportTrialBalanceMode(trialBalanceMode)).AsEnumerable().ToList();
         var bsLines = allLines
-            .Where(x => !IsTemporaryBusinessStagingAccount(x.AccountBusinessId, x.AccountParentAccountId))
+            .Where(x => !AccountingDashboardFinance.IsTemporaryChartAccount(x.AccountType))
             .ToList();
         var assets = bsLines.Where(x => string.Equals(x.AccountType, "Asset", StringComparison.OrdinalIgnoreCase))
             .Sum(x => x.Debit - x.Credit);
@@ -951,14 +947,22 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
 
         var bsByAccount = bsLines
             .Where(x => IsBalanceSheetAccountType(x.AccountType))
-            .GroupBy(x => new { x.AccountId, x.AccountCode, x.AccountName, x.AccountType })
+            .GroupBy(x => new { x.AccountId, x.AccountCode, x.AccountName, x.AccountType, x.AccountParentAccountId })
             .Select(g =>
             {
                 var t = g.Key.AccountType ?? "";
                 var balance = string.Equals(t, "Asset", StringComparison.OrdinalIgnoreCase)
                     ? g.Sum(x => x.Debit - x.Credit)
                     : g.Sum(x => x.Credit - x.Debit);
-                return new { g.Key.AccountId, g.Key.AccountCode, g.Key.AccountName, g.Key.AccountType, Balance = balance };
+                return new
+                {
+                    g.Key.AccountId,
+                    g.Key.AccountCode,
+                    g.Key.AccountName,
+                    g.Key.AccountType,
+                    g.Key.AccountParentAccountId,
+                    Balance = balance,
+                };
             })
             .Where(x => Math.Abs(x.Balance) > 0.000001)
             .ToList();
@@ -966,7 +970,14 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
         var assetAccounts = bsByAccount
             .Where(x => string.Equals(x.AccountType, "Asset", StringComparison.OrdinalIgnoreCase))
             .OrderBy(x => x.AccountCode)
-            .Select(x => new { code = x.AccountCode, name = x.AccountName, balance = x.Balance })
+            .Select(x => new
+            {
+                accountId = x.AccountId,
+                parentAccountId = x.AccountParentAccountId,
+                code = x.AccountCode,
+                name = x.AccountName,
+                balance = x.Balance,
+            })
             .Cast<object>()
             .ToList();
         var liabilityAccounts = bsByAccount
@@ -1027,7 +1038,7 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
         var stationFilter = ResolveStationFilterForReports(stationId);
         var raw = FilterLines(bid, from, to, stationFilter, IncomeStatementTrialBalanceMode(trialBalanceMode))
             .AsEnumerable()
-            .Where(x => !IsTemporaryBusinessStagingAccount(x.AccountBusinessId, x.AccountParentAccountId))
+            .Where(x => !AccountingDashboardFinance.IsTemporaryChartAccount(x.AccountType))
             .ToList();
 
         static double ClassicPlSignedAmountForLine(string? accountType, double debit, double credit)
@@ -1130,7 +1141,7 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
 
         var periodLinesAll = FilterLines(bid, from, to, stationFilter, incomeStatementJournalMode)
             .AsEnumerable()
-            .Where(x => !IsTemporaryBusinessStagingAccount(x.AccountBusinessId, x.AccountParentAccountId))
+            .Where(x => !AccountingDashboardFinance.IsTemporaryChartAccount(x.AccountType))
             .ToList();
 
         // Exclude pure internal transfers between cash/bank accounts from cash-flow.
@@ -1170,7 +1181,7 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
         DateTime? openingTo = from.HasValue ? from.Value.Date.AddDays(-1) : null;
         var openingCashBalance = FilterLines(bid, null, openingTo, stationFilter, incomeStatementJournalMode)
             .AsEnumerable()
-            .Where(x => !IsTemporaryBusinessStagingAccount(x.AccountBusinessId, x.AccountParentAccountId))
+            .Where(x => !AccountingDashboardFinance.IsTemporaryChartAccount(x.AccountType))
             .Where(x => string.Equals(x.AccountType, "Asset", StringComparison.OrdinalIgnoreCase) && IsLikelyCashOrBankAsset(x.AccountName))
             .Sum(x => x.Debit - x.Credit);
         // Net cash and ending balance from activity lines only (opening + O+I+F); do not override ending from BS.
@@ -1256,7 +1267,7 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
 
         static bool IsEquityStaging(ReportJournalLineRow x) =>
             string.Equals(x.AccountType, "Equity", StringComparison.OrdinalIgnoreCase)
-            && !IsTemporaryBusinessStagingAccount(x.AccountBusinessId, x.AccountParentAccountId);
+            && !AccountingDashboardFinance.IsTemporaryChartAccount(x.AccountType);
 
         var beginningTo = fromDate.AddDays(-1);
         var begLines = beginningTo >= new DateTime(1900, 1, 1)
@@ -1312,7 +1323,7 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
 
         var plRaw = FilterLines(bid, fromDate, toDate, stationFilter, IncomeStatementTrialBalanceMode(trialBalanceMode))
             .AsEnumerable()
-            .Where(x => !IsTemporaryBusinessStagingAccount(x.AccountBusinessId, x.AccountParentAccountId))
+            .Where(x => !AccountingDashboardFinance.IsTemporaryChartAccount(x.AccountType))
             .ToList();
         var byAccount = plRaw
             .GroupBy(x => new { x.AccountId, x.AccountCode, x.AccountName, x.AccountType })

@@ -15,17 +15,12 @@ namespace gas_station.Controllers;
 public class AccountsController(IAccountRepository repository, GasStationDBContext db) : ControllerBase
 {
     private const string SuperAdminRole = "SuperAdmin";
-    private const string AdminRole = "Admin";
-    private const string AccountantRole = "Accountant";
 
     private static bool IsSuperAdmin(ClaimsPrincipal user) => user.IsInRole(SuperAdminRole);
 
-    /// <summary>Admin / Accountant temporary top-level business accounts (null parent, explicit chart type).</summary>
-    private static bool IsAdminOrAccountant(ClaimsPrincipal user) =>
-        user.IsInRole(AdminRole) || user.IsInRole(AccountantRole);
-
+    /// <summary>Only SuperAdmin may create business-scoped accounts without a parent (chart headers). Others use a parent (e.g. Temporary Account for staging lines).</summary>
     private static bool CanSetBusinessTopLevelWithoutParent(ClaimsPrincipal user) =>
-        IsSuperAdmin(user) || IsAdminOrAccountant(user);
+        IsSuperAdmin(user);
 
     private bool TryGetJwtBusiness(out int businessId)
     {
@@ -268,12 +263,41 @@ public class AccountsController(IAccountRepository repository, GasStationDBConte
 
         var defaults = new (string code, string name, string type)[]
         {
-            ("1000", "Assets", "Asset"),
-            ("2000", "Liabilities", "Liability"),
-            ("3000", "Equity", "Equity"),
-            ("4000", "Income", "Income"),
-            ("5000", "Expenses", "Expense"),
-            ("6000", "COGS", "COGS"),
+            // ASSET GROUPS
+            ("1000", "Cash Accounts", "Asset"),
+            ("1100", "Bank Accounts", "Asset"),
+            ("1200", "Receivables", "Asset"),
+            ("1300", "Inventory", "Asset"),
+            ("1400", "Prepaid Expenses", "Asset"),
+            ("1500", "Fixed Assets", "Asset"),
+
+            // LIABILITY GROUPS
+            ("2000", "Payables", "Liability"),
+            ("2100", "Loans", "Liability"),
+            ("2200", "Accrued Liabilities", "Liability"),
+            ("2300", "Taxes Payable", "Liability"),
+
+            // EQUITY GROUPS
+            ("3000", "Capital", "Equity"),
+            ("3100", "Retained Earnings", "Equity"),
+            ("3200", "Drawings", "Equity"),
+
+            // INCOME GROUPS
+            ("4000", "Sales Revenue", "Income"),
+            ("4100", "Service Revenue", "Income"),
+            ("4200", "Other Income", "Income"),
+
+            // EXPENSE GROUPS
+            ("5000", "Operating Expenses", "Expense"),
+            ("5100", "Administrative Expenses", "Expense"),
+            ("5200", "Marketing Expenses", "Expense"),
+            ("5300", "Financial Expenses", "Expense"),
+
+            // COGS GROUPS
+            ("6000", "Inventory Costs", "COGS"),
+            ("6100", "Direct Costs", "COGS"),
+            // Temporary Accounts
+            ("0000", "Income Summary", "Temporary"),
         };
 
         var created = 0;

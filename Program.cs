@@ -139,6 +139,7 @@ using gas_station.Data.Context;
 using gas_station.Data.Interfaces;
 using gas_station.Data.Repository;
 using gas_station.Data.Seeds;
+using gas_station.Middleware;
 using gas_station.Services;
 using System.Text;
 using System.Text.Json;
@@ -233,6 +234,7 @@ builder.Services.AddScoped<IPurchaseRepository, PurchaseRepository>();
 builder.Services.AddScoped<ISupplierPaymentRepository, SupplierPaymentRepository>();
 builder.Services.AddScoped<ICustomerFuelGivenRepository, CustomerFuelGivenRepository>();
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
+builder.Services.AddScoped<IAccountingDashboardRepository, AccountingDashboardRepository>();
 builder.Services.AddScoped<IJournalEntryRepository, JournalEntryRepository>();
 builder.Services.AddScoped<ICustomerPaymentRepository, CustomerPaymentRepository>();
 builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
@@ -280,6 +282,7 @@ else
 }
 
 app.UseAuthentication();
+app.UseMiddleware<BusinessAccessGateMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();

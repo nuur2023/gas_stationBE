@@ -14,5 +14,8 @@ public class PermissionMeResponseViewModel
     /// <summary>SuperAdmin / Admin: all navigation allowed without checking items.</summary>
     public bool FullAccess { get; set; }
 
+    /// <summary>When false, pool-related routes are omitted from <see cref="Items"/> (JWT business).</summary>
+    public bool SupportsPool { get; set; } = true;
+
     public List<PermissionMeItemViewModel> Items { get; set; } = new();
 }

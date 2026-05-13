@@ -180,6 +180,13 @@ public class LiterReceivedsController(
         if (!dto.ConfirmBusinessPoolTransferReceived)
             return null;
 
+        var bizRow = await dbContext.Businesses.AsNoTracking()
+            .FirstOrDefaultAsync(b => b.Id == targetBusinessId && !b.IsDeleted);
+        if (bizRow is null)
+            return BadRequest("Business not found.");
+        if (!bizRow.IsSupportPool)
+            return BadRequest("This business does not use the fuel pool.");
+
         if (!IsOutFlow(normalizedFlow))
             return BadRequest("Business pool transfer confirmation applies only to Out (transfer) records.");
 

@@ -1,19 +1,23 @@
 using System.Globalization;
 using System.Security.Claims;
+using gas_station.Data.Context;
 using gas_station.Data.Interfaces;
 using gas_station.Models;
 using gas_station.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace gas_station.Controllers;
 
 [ApiController]
 [Route("api/business-fuel-inventory")]
 [Authorize]
-public class BusinessFuelInventoryLedgerController(IBusinessFuelInventoryLedgerRepository repository) : ControllerBase
+public class BusinessFuelInventoryLedgerController(IBusinessFuelInventoryLedgerRepository repository, GasStationDBContext db) : ControllerBase
 {
     private const string SuperAdminRole = "SuperAdmin";
+
+    private readonly GasStationDBContext _db = db;
 
     private static bool IsSuperAdmin(ClaimsPrincipal user) => user.IsInRole(SuperAdminRole);
 
@@ -102,11 +106,31 @@ public class BusinessFuelInventoryLedgerController(IBusinessFuelInventoryLedgerR
         return true;
     }
 
+    private async Task<IActionResult?> EnsureBusinessSupportsPoolAsync(int businessId)
+    {
+        var row = await _db.Businesses.AsNoTracking()
+            .FirstOrDefaultAsync(b => b.Id == businessId && !b.IsDeleted);
+        if (row is null)
+            return BadRequest("Business not found.");
+        if (!row.IsSupportPool)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                code = "business_pool_disabled",
+                message = "This business does not use fuel pooling.",
+            });
+        }
+
+        return null;
+    }
+
     [HttpGet("balances")]
     public async Task<IActionResult> GetBalances([FromQuery] int? businessId = null)
     {
         if (!ResolveQueryBusiness(businessId, out var bid, out var err))
             return err!;
+        if (await EnsureBusinessSupportsPoolAsync(bid) is { } poolErr)
+            return poolErr;
         return Ok(await repository.GetBalancesAsync(bid));
     }
 
@@ -115,6 +139,8 @@ public class BusinessFuelInventoryLedgerController(IBusinessFuelInventoryLedgerR
     {
         if (!ResolveQueryBusiness(businessId, out var bid, out var err))
             return err!;
+        if (await EnsureBusinessSupportsPoolAsync(bid) is { } poolErr)
+            return poolErr;
         return Ok(await repository.GetCreditsPagedAsync(bid, page, pageSize));
     }
 
@@ -127,6 +153,8 @@ public class BusinessFuelInventoryLedgerController(IBusinessFuelInventoryLedgerR
     {
         if (!ResolveQueryBusiness(businessId, out var bid, out var err))
             return err!;
+        if (await EnsureBusinessSupportsPoolAsync(bid) is { } poolErr)
+            return poolErr;
         TransferInventoryStatus? st = status?.Trim().ToLowerInvariant() switch
         {
             "pending" => TransferInventoryStatus.Pending,
@@ -144,6 +172,8 @@ public class BusinessFuelInventoryLedgerController(IBusinessFuelInventoryLedgerR
     {
         if (!ResolveQueryBusiness(businessId, out var bid, out var err))
             return err!;
+        if (await EnsureBusinessSupportsPoolAsync(bid) is { } poolErr)
+            return poolErr;
         if (toStationId <= 0 || fuelTypeId <= 0)
             return BadRequest("toStationId and fuelTypeId are required.");
         return Ok(await repository.GetPendingTransfersForConfirmAsync(bid, toStationId, fuelTypeId));
@@ -154,6 +184,8 @@ public class BusinessFuelInventoryLedgerController(IBusinessFuelInventoryLedgerR
     {
         if (!ResolveTargetBusiness(dto.BusinessId, out var bid, out var bizErr))
             return bizErr!;
+        if (await EnsureBusinessSupportsPoolAsync(bid) is { } poolErr)
+            return poolErr;
         if (!TryGetUserId(out var userId, out var uerr))
             return uerr!;
 
@@ -183,6 +215,8 @@ public class BusinessFuelInventoryLedgerController(IBusinessFuelInventoryLedgerR
     {
         if (!ResolveTargetBusiness(body.BusinessId, out var targetBid, out var bizErr))
             return bizErr!;
+        if (await EnsureBusinessSupportsPoolAsync(targetBid) is { } poolErr)
+            return poolErr;
 
         try
         {
@@ -200,6 +234,8 @@ public class BusinessFuelInventoryLedgerController(IBusinessFuelInventoryLedgerR
     {
         if (!ResolveTargetBusiness(dto.BusinessId, out var bid, out var bizErr))
             return bizErr!;
+        if (await EnsureBusinessSupportsPoolAsync(bid) is { } poolErr)
+            return poolErr;
         if (!TryGetUserId(out var userId, out var uerr))
             return uerr!;
 
@@ -229,6 +265,8 @@ public class BusinessFuelInventoryLedgerController(IBusinessFuelInventoryLedgerR
     {
         if (!ResolveTargetBusiness(dto.BusinessId, out var targetBid, out var bizErr))
             return bizErr!;
+        if (await EnsureBusinessSupportsPoolAsync(targetBid) is { } poolErr)
+            return poolErr;
 
         if (!TryGetUserId(out var userId, out var uerr))
             return uerr!;
@@ -262,6 +300,8 @@ public class BusinessFuelInventoryLedgerController(IBusinessFuelInventoryLedgerR
             return BadRequest("Body is required.");
         if (!ResolveTargetBusiness(body.BusinessId, out var targetBid, out var bizErr))
             return bizErr!;
+        if (await EnsureBusinessSupportsPoolAsync(targetBid) is { } poolErr)
+            return poolErr;
         if (!TryGetUserId(out var userId, out var uerr))
             return uerr!;
 
@@ -289,6 +329,8 @@ public class BusinessFuelInventoryLedgerController(IBusinessFuelInventoryLedgerR
     {
         if (!ResolveQueryBusiness(businessId, out var bid, out var err))
             return err!;
+        if (await EnsureBusinessSupportsPoolAsync(bid) is { } poolErr)
+            return poolErr;
         return Ok(await repository.GetTransferAuditsPagedForBusinessAsync(bid, page, pageSize, q));
     }
 
@@ -297,6 +339,8 @@ public class BusinessFuelInventoryLedgerController(IBusinessFuelInventoryLedgerR
     {
         if (!ResolveQueryBusiness(businessId, out var bid, out var err))
             return err!;
+        if (await EnsureBusinessSupportsPoolAsync(bid) is { } poolErr)
+            return poolErr;
         return Ok(await repository.GetTransferAuditAsync(id, bid));
     }
 }
