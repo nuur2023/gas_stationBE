@@ -42,7 +42,13 @@ public class FuelTypeRepository(GasStationDBContext context) : IFuelTypeReposito
         return entity;
     }
 
-    public Task<List<FuelType>> GetAllAsync() => Set.Where(x => !x.IsDeleted).ToListAsync();
+    public Task<List<FuelType>> GetAllAsync(int? businessId = null)
+    {
+        var q = Set.AsQueryable().Where(x => !x.IsDeleted);
+        if (businessId.HasValue)
+            q = q.Where(x => x.BusinessId == businessId.Value);
+        return q.OrderBy(x => x.FuelName).ToListAsync();
+    }
 
     public Task<FuelType?> GetByIdAsync(int id) => Set.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 }
