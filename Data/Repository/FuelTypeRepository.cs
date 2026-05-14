@@ -24,8 +24,10 @@ public class FuelTypeRepository(GasStationDBContext context) : IFuelTypeReposito
         var existing = await Set.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted)
             ?? throw new KeyNotFoundException($"Entity with id {id} was not found.");
 
-        _context.Entry(existing).CurrentValues.SetValues(entity);
-        existing.Id = id;
+        // Do not use SetValues(entity): API models can carry empty navigations / mismatched
+        // graph state and EF throws InvalidOperationException. Only scalar fields are editable.
+        existing.FuelName = entity.FuelName;
+        existing.BusinessId = entity.BusinessId;
         existing.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
         return existing;
