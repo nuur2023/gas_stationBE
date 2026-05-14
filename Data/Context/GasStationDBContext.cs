@@ -29,6 +29,7 @@ public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) 
     public DbSet<Station> Stations => Set<Station>();
     public DbSet<Dipping> Dippings => Set<Dipping>();
     public DbSet<LiterReceived> LiterReceiveds => Set<LiterReceived>();
+    public DbSet<LiterReceivedViewerType> LiterReceivedViewerTypes => Set<LiterReceivedViewerType>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<Purchase> Purchases => Set<Purchase>();
     public DbSet<PurchaseItem> PurchaseItems => Set<PurchaseItem>();
@@ -375,6 +376,21 @@ public class GasStationDBContext(DbContextOptions<GasStationDBContext> options) 
             e.Property(x => x.Title).HasMaxLength(256);
             e.Property(x => x.Body).HasMaxLength(4000);
             e.HasIndex(x => new { x.BusinessId, x.CreatedAt });
+        });
+
+        modelBuilder.Entity<LiterReceivedViewerType>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(256);
+            e.Property(x => x.Code).HasMaxLength(128);
+            e.HasIndex(x => x.Code).IsUnique();
+        });
+
+        modelBuilder.Entity<LiterReceived>(e =>
+        {
+            e.HasOne(x => x.ViewerType)
+                .WithMany()
+                .HasForeignKey(x => x.ViewerTypeId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<AppNotificationRead>(e =>

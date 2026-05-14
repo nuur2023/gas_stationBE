@@ -66,7 +66,6 @@ public class AccountingPeriodsController(GasStationDBContext db) : ControllerBas
                 status = (byte)x.Status,
                 x.ClosedAt,
                 x.ClosedByUserId,
-                x.CloseJournalEntryId,
             })
             .ToListAsync();
         return Ok(rows);
@@ -138,7 +137,7 @@ public class AccountingPeriodsController(GasStationDBContext db) : ControllerBas
 
     /// <summary>Marks period closed after manual books close. Does not post a journal.</summary>
     [HttpPost("{id:int}/mark-closed")]
-    public async Task<IActionResult> MarkClosed(int id, [FromBody] MarkAccountingPeriodClosedViewModel? dto)
+    public async Task<IActionResult> MarkClosed(int id)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
         var period = await db.AccountingPeriods.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
@@ -147,22 +146,12 @@ public class AccountingPeriodsController(GasStationDBContext db) : ControllerBas
         if (period.Status != AccountingPeriodStatus.Open)
             return BadRequest("Only open periods can be marked closed.");
 
-        int? closeJeId = null;
-        if (dto != null && dto.CloseJournalEntryId is int jid && jid > 0)
-        {
-            var okJe = await db.JournalEntries.AsNoTracking()
-                .AnyAsync(e => !e.IsDeleted && e.Id == jid && e.BusinessId == period.BusinessId);
-            if (!okJe) return BadRequest("Journal entry not found for this business.");
-            closeJeId = jid;
-        }
-
         period.Status = AccountingPeriodStatus.Closed;
         period.ClosedAt = DateTime.UtcNow;
         period.ClosedByUserId = userId;
-        period.CloseJournalEntryId = closeJeId;
         period.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
-        return Ok(new { message = "Period marked closed.", closeJournalEntryId = closeJeId });
+        return Ok(new { message = "Period marked closed." });
     }
 
     [HttpPost("{id:int}/reopen")]
@@ -179,7 +168,6 @@ public class AccountingPeriodsController(GasStationDBContext db) : ControllerBas
         period.Status = AccountingPeriodStatus.Open;
         period.ClosedAt = null;
         period.ClosedByUserId = null;
-        period.CloseJournalEntryId = null;
         period.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return Ok(new { message = "Period reopened (closing journal not reversed — adjust manually if needed)." });

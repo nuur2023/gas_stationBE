@@ -66,6 +66,18 @@ public class LiterReceivedsController(
         return true;
     }
 
+    private async Task<IActionResult?> ValidateViewerTypeIdAsync(int? viewerTypeId)
+    {
+        if (viewerTypeId is null or <= 0)
+        {
+            return null;
+        }
+
+        var exists = await dbContext.LiterReceivedViewerTypes.AsNoTracking()
+            .AnyAsync(x => x.Id == viewerTypeId && !x.IsDeleted);
+        return exists ? null : BadRequest("Invalid viewer type.");
+    }
+
     private bool ResolveLiterBusiness(LiterReceivedWriteRequestViewModel dto, out int targetBusinessId, out IActionResult? err)
     {
         targetBusinessId = 0;
@@ -377,6 +389,12 @@ public class LiterReceivedsController(
             return stationErr;
         }
 
+        var viewerErr = await ValidateViewerTypeIdAsync(dto.ViewerTypeId);
+        if (viewerErr is not null)
+        {
+            return viewerErr;
+        }
+
         var flow = dto.Type.Trim();
         var normalizedFlow = IsInFlow(flow) ? "In" : "Out";
         var targo = dto.Targo.Trim();
@@ -399,6 +417,7 @@ public class LiterReceivedsController(
             BusinessId = targetBusinessId,
             UserId = userId,
             Date = dto.RecordedAt?.UtcDateTime ?? DateTime.UtcNow,
+            ViewerTypeId = dto.ViewerTypeId is > 0 ? dto.ViewerTypeId : null,
         };
 
         await using var tx = await dbContext.Database.BeginTransactionAsync();
@@ -492,6 +511,12 @@ public class LiterReceivedsController(
             return stationErr2;
         }
 
+        var viewerErr2 = await ValidateViewerTypeIdAsync(dto.ViewerTypeId);
+        if (viewerErr2 is not null)
+        {
+            return viewerErr2;
+        }
+
         var flow = dto.Type.Trim();
         var normalizedFlow = IsInFlow(flow) ? "In" : "Out";
         var targo = dto.Targo.Trim();
@@ -519,6 +544,7 @@ public class LiterReceivedsController(
                 normalizedFlow == "In" && dto.FromStationId.HasValue && dto.FromStationId.Value > 0
                     ? dto.FromStationId
                     : null;
+            existing.ViewerTypeId = dto.ViewerTypeId is > 0 ? dto.ViewerTypeId : null;
             existing.UserId = userId;
             if (dto.RecordedAt.HasValue)
                 existing.Date = dto.RecordedAt.Value.UtcDateTime;

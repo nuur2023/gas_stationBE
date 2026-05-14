@@ -37,13 +37,8 @@ public class JournalEntryDescriptionPatchViewModel
 {
     public string Description { get; set; } = "";
     public DateTimeOffset? Date { get; set; }
-}
-
-/// <summary>Mark an open period closed after books are closed manually (no journal is posted).</summary>
-public class MarkAccountingPeriodClosedViewModel
-{
-    /// <summary>Optional manual close journal id for audit (must belong to the same business).</summary>
-    public int? CloseJournalEntryId { get; set; }
+    /// <summary>Optional: 0 Normal, 1 Adjusting, 2 Closing. Cannot set RecurringAuto via patch.</summary>
+    public byte? EntryKind { get; set; }
 }
 
 public class CustomerPaymentWriteRequestViewModel

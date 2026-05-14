@@ -8,6 +8,10 @@ public interface IJournalEntryRepository : IGasStationInterface<JournalEntry>
     Task<List<JournalEntry>> GetAllAsync();
     Task<JournalEntry?> GetByIdAsync(int id);
     Task<PagedResult<JournalEntry>> GetPagedAsync(int page, int pageSize, string? search, int? businessId, int? filterStationId);
-    Task<JournalEntry?> UpdateHeaderAsync(int id, string description, DateTime? dateUtc = null);
+    Task<JournalEntry?> UpdateHeaderAsync(
+        int id,
+        string description,
+        DateTime? dateUtc = null,
+        JournalEntryKind? entryKind = null);
 }
 

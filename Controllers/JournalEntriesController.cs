@@ -215,16 +215,36 @@ public class JournalEntriesController(
 
         var desc = dto.Description?.Trim() ?? string.Empty;
         if (desc.Length > 4000) return BadRequest("Description is too long (max 4000 characters).");
+
+        JournalEntryKind nextKind = row.EntryKind;
+        if (dto.EntryKind is { } ek)
+        {
+            if (ek > (byte)JournalEntryKind.Closing)
+                return BadRequest("Invalid entry type.");
+            if (ek == (byte)JournalEntryKind.RecurringAuto)
+                return BadRequest("Entry type cannot be set to recurring auto.");
+            nextKind = (JournalEntryKind)ek;
+        }
+
         DateTime? nextDateUtc = null;
         if (dto.Date.HasValue)
         {
             var resolvedDate = dto.Date.Value.UtcDateTime;
-            if (await AccountingPeriodGuard.IsPostingBlockedAsync(dbContext, row.BusinessId, resolvedDate, row.EntryKind))
+            if (await AccountingPeriodGuard.IsPostingBlockedAsync(dbContext, row.BusinessId, resolvedDate, nextKind))
                 return BadRequest("The journal date falls in a closed accounting period.");
             nextDateUtc = resolvedDate;
         }
+        else if (dto.EntryKind is not null && nextKind != row.EntryKind)
+        {
+            if (await AccountingPeriodGuard.IsPostingBlockedAsync(dbContext, row.BusinessId, row.Date, nextKind))
+                return BadRequest("Cannot change entry type while the journal date falls in a closed period.");
+        }
 
-        var updated = await repository.UpdateHeaderAsync(id, desc, nextDateUtc);
+        var updated = await repository.UpdateHeaderAsync(
+            id,
+            desc,
+            nextDateUtc,
+            dto.EntryKind is null ? null : nextKind);
         return updated is null ? NotFound() : Ok(updated);
     }
 

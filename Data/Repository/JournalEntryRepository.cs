@@ -92,12 +92,17 @@ public class JournalEntryRepository(GasStationDBContext context) : IJournalEntry
         return new PagedResult<JournalEntry>(items, total, page, pageSize);
     }
 
-    public async Task<JournalEntry?> UpdateHeaderAsync(int id, string description, DateTime? dateUtc = null)
+    public async Task<JournalEntry?> UpdateHeaderAsync(
+        int id,
+        string description,
+        DateTime? dateUtc = null,
+        JournalEntryKind? entryKind = null)
     {
         var row = await Set.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (row is null) return null;
         row.Description = description;
         if (dateUtc.HasValue) row.Date = dateUtc.Value;
+        if (entryKind.HasValue) row.EntryKind = entryKind.Value;
         row.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
         return await GetByIdAsync(id);

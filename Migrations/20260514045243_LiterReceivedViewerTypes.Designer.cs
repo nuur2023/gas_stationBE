@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using gas_station.Data.Context;
 
@@ -11,9 +12,11 @@ using gas_station.Data.Context;
 namespace gas_station.Migrations
 {
     [DbContext(typeof(GasStationDBContext))]
-    partial class GasStationDBContextModelSnapshot : ModelSnapshot
+    [Migration("20260514045243_LiterReceivedViewerTypes")]
+    partial class LiterReceivedViewerTypes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -74,6 +77,9 @@ namespace gas_station.Migrations
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("BusinessId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CloseJournalEntryId")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("ClosedAt")

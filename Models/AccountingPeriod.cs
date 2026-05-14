@@ -10,5 +10,4 @@ public class AccountingPeriod : BaseModel
     public AccountingPeriodStatus Status { get; set; } = AccountingPeriodStatus.Open;
     public DateTime? ClosedAt { get; set; }
     public int? ClosedByUserId { get; set; }
-    public int? CloseJournalEntryId { get; set; }
 }

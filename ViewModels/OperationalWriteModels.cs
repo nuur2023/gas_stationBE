@@ -272,5 +272,8 @@ public class LiterReceivedWriteRequestViewModel
     /// <summary>Pending <c>TransferInventory</c> id to mark received (Out flow).</summary>
     public int? ConfirmTransferInventoryId { get; set; }
 
+    /// <summary>Optional: categorization from <see cref="Models.LiterReceivedViewerType"/>.</summary>
+    public int? ViewerTypeId { get; set; }
+
 }
 

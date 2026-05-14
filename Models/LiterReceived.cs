@@ -28,5 +28,8 @@ public class LiterReceived : BaseModel
     public int BusinessId { get; set; }
     public int UserId { get; set; }
 
+    public int? ViewerTypeId { get; set; }
+    public LiterReceivedViewerType? ViewerType { get; set; }
+
     public DateTime Date { get; set; } = DateTime.UtcNow;
 }
