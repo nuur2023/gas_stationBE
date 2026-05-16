@@ -88,9 +88,12 @@ internal static partial class AccountingDashboardFinance
         };
 
     internal static string IncomeStatementTrialBalanceMode(string? requested) =>
-        string.Equals(requested?.Trim(), "unadjusted", StringComparison.OrdinalIgnoreCase)
-            ? "unadjusted"
-            : "adjusted";
+        requested?.Trim().ToLowerInvariant() switch
+        {
+            "unadjusted" => "unadjusted",
+            "postclosing" => "postclosing",
+            _ => "adjusted",
+        };
 
     /// <summary>
     /// Journal lines on accounts whose chart type is Temporary (e.g. clearing / staging under Temporary parent) are omitted from statements.
@@ -238,6 +241,28 @@ internal static partial class AccountingDashboardFinance
             && !IsCogsBucket(accountType, accountCode, accountName)
             && amount >= 0);
 
+    private static bool IsExpenseClassification(string? accountType, string? accountCode, string? accountName) =>
+        IsExpenseType(accountType) || IsExpenseClassCode(accountCode) || IsExpenseName(accountName);
+
+    internal static double PlAccountPeriodAmount(
+        string? accountType,
+        string? accountCode,
+        string? accountName,
+        IEnumerable<(double Debit, double Credit)> lines)
+    {
+        var rows = lines.ToList();
+        if (IsExpenseClassification(accountType, accountCode, accountName))
+        {
+            var signedNet = rows.Sum(x => x.Debit - x.Credit);
+            return Math.Abs(signedNet) < 0.000001 ? 0 : Math.Abs(signedNet);
+        }
+
+        return rows.Sum(x => PlSignedAmountForLine(accountType, accountCode, accountName, x.Debit, x.Credit));
+    }
+
+    internal static double PlIncomeStatementAmountForLine(string? accountType, string? accountCode, string? accountName, double debit, double credit) =>
+        PlSignedAmountForLine(accountType, accountCode, accountName, debit, credit);
+
     internal static double PlSignedAmountForLine(string? accountType, string? accountCode, string? accountName, double debit, double credit)
     {
         if (IsIncomeType(accountType) || IsIncomeClassCode(accountCode) || IsIncomeName(accountName)) return credit - debit;
@@ -279,7 +304,11 @@ internal static partial class AccountingDashboardFinance
                 g.Key.AccountCode,
                 g.Key.AccountName,
                 g.Key.AccountType,
-                Amount = g.Sum(x => PlSignedAmountForLine(g.Key.AccountType, g.Key.AccountCode, g.Key.AccountName, x.Debit, x.Credit)),
+                Amount = PlAccountPeriodAmount(
+                    g.Key.AccountType,
+                    g.Key.AccountCode,
+                    g.Key.AccountName,
+                    g.Select(x => (x.Debit, x.Credit))),
             })
             .Where(x => Math.Abs(x.Amount) > 0.000001)
             .ToList();

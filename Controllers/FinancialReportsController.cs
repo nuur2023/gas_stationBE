@@ -136,15 +136,16 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
     }
 
     /// <summary>
-    /// Journal scope for <b>income statement</b> activity (revenue, COGS, expense) and period net income.
-    /// Closing entries belong on the balance sheet / equity (clearing nominals to retained earnings), not in period P&amp;L;
-    /// including them when their date falls inside a new open period blends the prior period&apos;s close into the new period.
-    /// Post-closing P&amp;L therefore uses the same line filter as adjusted (exclude closing).
+    /// Journal scope for income statement activity (revenue, COGS, expense) and period net income.
+    /// Post-closing includes closing entries so nominals are zero after close for the selected period.
     /// </summary>
     private static string IncomeStatementTrialBalanceMode(string? requested) =>
-        string.Equals(requested?.Trim(), "unadjusted", StringComparison.OrdinalIgnoreCase)
-            ? "unadjusted"
-            : "adjusted";
+        requested?.Trim().ToLowerInvariant() switch
+        {
+            "unadjusted" => "unadjusted",
+            "postclosing" => "postclosing",
+            _ => "adjusted",
+        };
 
     [HttpGet("trial-balance")]
     public IActionResult TrialBalance(
@@ -355,6 +356,8 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
         double Assets,
         double Liabilities,
         double Equity,
+        /// <summary>Unclosed period earnings plug (0 when already in equity or post-closing).</summary>
+        double NetIncome,
         double LiabilitiesAndEquity,
         List<object> AssetAccounts,
         List<object> LiabilityAccounts,
@@ -888,7 +891,7 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
                 g.Key.AccountCode,
                 g.Key.AccountName,
                 g.Key.AccountType,
-                Amount = g.Sum(x => PlSignedAmountForLine(g.Key.AccountType, g.Key.AccountCode, g.Key.AccountName, x.Debit, x.Credit)),
+                Amount = PlAccountPeriodAmount(g.Key.AccountType, g.Key.AccountCode, g.Key.AccountName, g),
             })
             .Where(x => Math.Abs(x.Amount) > 0.000001)
             .ToList();
@@ -993,15 +996,56 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
             .Cast<object>()
             .ToList();
 
+        // Adjusted / unadjusted: earnings not yet in equity accounts appear as a balancing plug.
+        // When net income was already closed or transferred into Retained Earnings (included in this view), gap is ~0 — no plug.
+        var statementMode = StatementReportTrialBalanceMode(trialBalanceMode);
+        var ledgerLiabilitiesAndEquity = liabilities + equity;
+        var netIncomePlug = 0.0;
+        if (!string.Equals(statementMode, "postclosing", StringComparison.OrdinalIgnoreCase))
+        {
+            var ledgerGap = assets - ledgerLiabilitiesAndEquity;
+            if (Math.Abs(ledgerGap) > 0.000001)
+                netIncomePlug = ledgerGap;
+        }
+
         return new BalanceSheetReportData(
             assets,
             liabilities,
             equity,
-            liabilities + equity,
+            netIncomePlug,
+            ledgerLiabilitiesAndEquity + netIncomePlug,
             assetAccounts,
             liabilityAccounts,
             equityAccounts);
     }
+
+    /// <summary>P&amp;L expense lines use debit-normal presentation (positive expense activity).</summary>
+    private static bool IsExpenseClassification(string? accountType, string? accountCode, string? accountName) =>
+        IsExpenseType(accountType) || IsExpenseClassCode(accountCode) || IsExpenseName(accountName);
+
+    /// <summary>
+    /// Period P&amp;L amount for one account. Expenses use signed net (debit − credit) at account level so closing
+    /// entries zero the account; per-line Abs would double-count debits and credits.
+    /// </summary>
+    private static double PlAccountPeriodAmount(
+        string? accountType,
+        string? accountCode,
+        string? accountName,
+        IEnumerable<ReportJournalLineRow> lines)
+    {
+        var rows = lines.ToList();
+        if (IsExpenseClassification(accountType, accountCode, accountName))
+        {
+            var signedNet = rows.Sum(x => x.Debit - x.Credit);
+            return Math.Abs(signedNet) < 0.000001 ? 0 : Math.Abs(signedNet);
+        }
+
+        return rows.Sum(x => PlSignedAmountForLine(accountType, accountCode, accountName, x.Debit, x.Credit));
+    }
+
+    /// <summary>Income-statement line amount (non-expense lines; expenses use <see cref="PlAccountPeriodAmount"/>).</summary>
+    private static double PlIncomeStatementAmountForLine(string? accountType, string? accountCode, string? accountName, double debit, double credit) =>
+        PlSignedAmountForLine(accountType, accountCode, accountName, debit, credit);
 
     private static double PlSignedAmountForLine(string? accountType, string? accountCode, string? accountName, double debit, double credit)
     {
@@ -1036,64 +1080,19 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
     {
         if (!ResolveBusiness(businessId, out var bid, out var err)) return err!;
         var stationFilter = ResolveStationFilterForReports(stationId);
-        var raw = FilterLines(bid, from, to, stationFilter, IncomeStatementTrialBalanceMode(trialBalanceMode))
-            .AsEnumerable()
-            .Where(x => !AccountingDashboardFinance.IsTemporaryChartAccount(x.AccountType))
-            .ToList();
-
-        static double ClassicPlSignedAmountForLine(string? accountType, double debit, double credit)
-        {
-            if (IsIncomeType(accountType)) return credit - debit;
-            if (IsCogsType(accountType) || IsExpenseType(accountType)) return debit - credit;
-            return 0;
-        }
-
-        var byAccount = raw
-            .GroupBy(x => new { x.AccountId, x.AccountCode, x.AccountName, x.AccountType })
-            .Select(g => new
-            {
-                g.Key.AccountId,
-                g.Key.AccountCode,
-                g.Key.AccountName,
-                g.Key.AccountType,
-                Amount = g.Sum(x => ClassicPlSignedAmountForLine(g.Key.AccountType, x.Debit, x.Credit)),
-            })
-            .Where(x => Math.Abs(x.Amount) > 0.000001)
-            .ToList();
-
-        var incomeAccounts = byAccount
-            .Where(x => IsIncomeType(x.AccountType))
-            .OrderBy(x => x.AccountCode)
-            .Select(x => new { code = x.AccountCode, name = x.AccountName, amount = x.Amount })
-            .ToList();
-        var cogsAccounts = byAccount
-            .Where(x => IsCogsType(x.AccountType))
-            .OrderBy(x => x.AccountCode)
-            .Select(x => new { code = x.AccountCode, name = x.AccountName, amount = x.Amount })
-            .ToList();
-        var expenseAccounts = byAccount
-            .Where(x => IsExpenseType(x.AccountType) || IsExpenseClassCode(x.AccountCode))
-            .OrderBy(x => x.AccountCode)
-            .Select(x => new { code = x.AccountCode, name = x.AccountName, amount = x.Amount })
-            .ToList();
-
-        var incomeTotal = incomeAccounts.Sum(x => x.amount);
-        var cogsTotal = cogsAccounts.Sum(x => x.amount);
-        var expenseTotal = expenseAccounts.Sum(x => x.amount);
-        var grossProfit = incomeTotal - cogsTotal;
-        var netOrdinaryIncome = grossProfit - expenseTotal;
+        var pl = BuildProfitLossReportData(bid, from, to, stationFilter, trialBalanceMode);
 
         return Ok(new
         {
-            incomeAccounts,
-            incomeTotal,
-            cogsAccounts,
-            cogsTotal,
-            expenseAccounts,
-            expenseTotal,
-            grossProfit,
-            netOrdinaryIncome,
-            netIncome = netOrdinaryIncome,
+            incomeAccounts = pl.IncomeAccounts.Select(x => new { code = x.code, name = x.name, amount = x.amount }).ToList(),
+            incomeTotal = pl.IncomeTotal,
+            cogsAccounts = pl.CogsAccounts.Select(x => new { code = x.code, name = x.name, amount = x.amount }).ToList(),
+            cogsTotal = pl.CogsTotal,
+            expenseAccounts = pl.ExpenseAccounts.Select(x => new { code = x.code, name = x.name, amount = x.amount }).ToList(),
+            expenseTotal = pl.ExpenseTotal,
+            grossProfit = pl.GrossProfit,
+            netOrdinaryIncome = pl.NetOrdinaryIncome,
+            netIncome = pl.NetIncome,
         });
     }
 
@@ -1112,6 +1111,7 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
             assets = bs.Assets,
             liabilities = bs.Liabilities,
             equity = bs.Equity,
+            netIncome = bs.NetIncome,
             liabilitiesAndEquity = bs.LiabilitiesAndEquity,
             assetAccounts = bs.AssetAccounts,
             liabilityAccounts = bs.LiabilityAccounts,
@@ -1129,15 +1129,10 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
     {
         if (!ResolveBusiness(businessId, out var bid, out var err)) return err!;
         var stationFilter = ResolveStationFilterForReports(stationId);
-        var statementMode = StatementReportTrialBalanceMode(trialBalanceMode);
         // P&L and cash-flow activity use income-statement journal scope (unadjusted vs adjusted; never post-closing nominals).
         var incomeStatementJournalMode = IncomeStatementTrialBalanceMode(trialBalanceMode);
         var pl = BuildProfitLossReportData(bid, from, to, stationFilter, incomeStatementJournalMode);
         var bs = BuildBalanceSheetReportData(bid, to, stationFilter, trialBalanceMode);
-        // Post-closing balance sheet: period net income is already in equity — do not repeat it as a separate plug line.
-        var balanceSheetNetIncomePlug = string.Equals(statementMode, "postclosing", StringComparison.OrdinalIgnoreCase)
-            ? 0.0
-            : pl.NetIncome;
 
         var periodLinesAll = FilterLines(bid, from, to, stationFilter, incomeStatementJournalMode)
             .AsEnumerable()
@@ -1204,8 +1199,8 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
             balanceSheet = new
             {
                 totalAsset = bs.Assets,
-                totalEquity = bs.Equity,
-                netIncome = balanceSheetNetIncomePlug,
+                totalEquity = bs.Equity + bs.NetIncome,
+                netIncome = bs.NetIncome,
                 assets = bs.AssetAccounts,
                 liabilities = bs.LiabilityAccounts,
                 equity = bs.EquityAccounts,
@@ -1269,6 +1264,21 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
             string.Equals(x.AccountType, "Equity", StringComparison.OrdinalIgnoreCase)
             && !AccountingDashboardFinance.IsTemporaryChartAccount(x.AccountType);
 
+        static bool IsDrawingsEquityRow(string? accountCode, string? accountName)
+        {
+            if (!string.IsNullOrWhiteSpace(accountCode))
+            {
+                var c = accountCode.Trim();
+                if (c.StartsWith("32", StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            if (!string.IsNullOrWhiteSpace(accountName))
+            {
+                var n = accountName.Trim();
+                if (n.Contains("drawing", StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
+
         var beginningTo = fromDate.AddDays(-1);
         var begLines = beginningTo >= new DateTime(1900, 1, 1)
             ? FilterLines(bid, null, beginningTo, stationFilter, mode).AsEnumerable().Where(IsEquityStaging).ToList()
@@ -1296,14 +1306,57 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
             })
             .ToList();
 
+        var drawingAccountIds = accountIds
+            .Where(id =>
+            {
+                endByAccount.TryGetValue(id, out var em);
+                begByAccount.TryGetValue(id, out var bm);
+                var code = em.Code ?? bm.Code ?? "";
+                var name = em.Name ?? bm.Name ?? "";
+                return IsDrawingsEquityRow(code, name);
+            })
+            .ToHashSet();
+
+        var drawingRows = new List<object>();
+        double drawingsBeginning = 0, drawingsChange = 0, drawingsEnding = 0;
+        foreach (var id in drawingAccountIds.OrderBy(id =>
+                 {
+                     endByAccount.TryGetValue(id, out var em);
+                     begByAccount.TryGetValue(id, out var bm);
+                     return (em.Code ?? bm.Code) ?? "";
+                 }))
+        {
+            var beginning = begByAccount.TryGetValue(id, out var begMeta) ? begMeta.Balance : 0;
+            var ending = endByAccount.TryGetValue(id, out var endMeta) ? endMeta.Balance : 0;
+            var change = ending - beginning;
+            if (Math.Abs(beginning) < 0.000001 && Math.Abs(ending) < 0.000001 && Math.Abs(change) < 0.000001)
+                continue;
+
+            begByAccount.TryGetValue(id, out var begRow);
+            endByAccount.TryGetValue(id, out var endRow);
+            var code = endRow.Code ?? begRow.Code ?? "";
+            var name = endRow.Name ?? begRow.Name ?? "";
+            drawingRows.Add(new
+            {
+                accountId = id,
+                code = code ?? "",
+                name = name ?? "",
+                beginning,
+                change,
+                ending,
+            });
+            drawingsBeginning += beginning;
+            drawingsEnding += ending;
+            drawingsChange += change;
+        }
+
         var equityRows = new List<object>();
         double totalBeginning = 0, totalChange = 0, totalEnding = 0;
         foreach (var id in accountIds)
         {
-            begByAccount.TryGetValue(id, out var begMeta);
-            endByAccount.TryGetValue(id, out var endMeta);
-            var beginning = begMeta.Balance;
-            var ending = endMeta.Balance;
+            if (drawingAccountIds.Contains(id)) continue;
+            var beginning = begByAccount.TryGetValue(id, out var begMeta) ? begMeta.Balance : 0;
+            var ending = endByAccount.TryGetValue(id, out var endMeta) ? endMeta.Balance : 0;
             var change = ending - beginning;
             var code = endMeta.Code ?? begMeta.Code ?? "";
             var name = endMeta.Name ?? begMeta.Name ?? "";
@@ -1321,7 +1374,12 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
             totalEnding += ending;
         }
 
-        var plRaw = FilterLines(bid, fromDate, toDate, stationFilter, IncomeStatementTrialBalanceMode(trialBalanceMode))
+        totalBeginning += drawingsBeginning;
+        totalChange += drawingsChange;
+        totalEnding += drawingsEnding;
+
+        var plJournalMode = IncomeStatementTrialBalanceMode(trialBalanceMode);
+        var plRaw = FilterLines(bid, fromDate, toDate, stationFilter, plJournalMode)
             .AsEnumerable()
             .Where(x => !AccountingDashboardFinance.IsTemporaryChartAccount(x.AccountType))
             .ToList();
@@ -1355,10 +1413,14 @@ public class FinancialReportsController(GasStationDBContext db) : ControllerBase
         return Ok(new
         {
             equityRows,
+            drawingRows,
             totalBeginning,
             totalChange,
             totalEnding,
             netIncome,
+            drawingsBeginning,
+            drawingsChange,
+            drawingsEnding,
         });
     }
 
